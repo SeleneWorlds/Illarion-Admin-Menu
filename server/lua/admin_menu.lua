@@ -1062,6 +1062,34 @@ AdminMenu.registerAction({
     end,
 })
 
+local baseTreasureOk, baseTreasure = pcall(require, "base.treasure")
+if baseTreasureOk then
+    AdminMenu.registerAction({
+        id = "illarion-admin-menu:create-treasure-map",
+        label = "Create Treasure Map",
+        description = "Create a treasure map for an online character.",
+        parameters = {
+            {
+                name = "target",
+                label = "Target",
+                type = "target",
+                resolver = "illarion:characters",
+                requireOnline = true,
+            },
+        },
+        isAvailable = function(player)
+            return getAdminCharacter(player) ~= nil
+        end,
+        execute = function(player, parameters)
+            local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+            local character = resolveOnlineTarget(parameters.target)
+            assert(baseTreasure.createMap(character), "No suitable treasure location could be found.")
+            administrator:logAdmin("Create Treasure Map for " .. character.name)
+            return "Created a treasure map for " .. character.name .. "."
+        end,
+    })
+end
+
 AdminMenu.registerAction({
     id = "illarion-admin-menu:give-item",
     label = "Give Item",
