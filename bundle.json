@@ -1,6 +1,6 @@
 {
   "name": "illarion-admin-menu",
   "description": "Illarion admin actions for the Moonlight admin menu.",
-  "dependencies": ["illarion-script-loader", "moonlight-admin", "moonlight-editor"],
+  "dependencies": ["illarion-script-loader", "moonlight-admin"],
   "entrypoints": ["server/lua/admin_menu.lua"]
 }
