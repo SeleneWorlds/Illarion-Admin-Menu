@@ -1,0 +1,882 @@
+local AdminMenu = require("moonlight-admin.server.lua.admin_menu")
+local Registries = require("selene.registries")
+local Players = require("selene.players")
+local CharacterPersistence = require("illarion-script-loader.server.lua.lib.characterPersistence")
+local AttributeManager = require("illarion-script-loader.server.lua.lib.attributeManager")
+local MagicManager = require("illarion-script-loader.server.lua.lib.magicManager")
+
+AdminMenu.registerRegistryVisualResolver("illarion:races", function(race)
+    local raceId = race:getMetadata("id")
+    return raceId and string.format("illarion:races/race_%d_0", raceId) or nil
+end)
+
+AdminMenu.registerRegistryVisualResolver("illarion:monsters", function(monster)
+    local race = Registries.findByName("illarion:races", monster:getField("race"))
+    local raceId = race and race:getMetadata("id")
+    return raceId and string.format("illarion:races/race_%d_0", raceId) or nil
+end)
+
+AdminMenu.registerRegistryVisualResolver("illarion:items", function(item)
+    return item:getField("visual")
+end)
+
+local function onlineCharacterOptions(initiatingPlayer)
+    local options = {}
+    local initiatingEntity = initiatingPlayer and initiatingPlayer:getControlledEntity()
+    local initiatingCharacter = initiatingEntity and Character.fromSelenePlayer(initiatingPlayer) or nil
+    for _, player in ipairs(Players.getOnlinePlayers()) do
+        if player:getControlledEntity() then
+            local character = Character.fromSelenePlayer(player)
+            table.insert(options, {
+                value = tostring(character.id),
+                label = character.name,
+                visual = string.format("illarion:races/race_%d_0", character:getRace()),
+                default = initiatingCharacter ~= nil and character.id == initiatingCharacter.id,
+            })
+        end
+    end
+    return options
+end
+
+AdminMenu.registerTargetResolver("illarion:characters", function(player)
+    local options = onlineCharacterOptions(player)
+    local onlineIds = {}
+    for _, option in ipairs(options) do
+        onlineIds[tonumber(option.value)] = true
+    end
+    for _, character in ipairs(CharacterPersistence.loadAllCharacterSummaries()) do
+        if not onlineIds[character.id] then
+            table.insert(options, {
+                value = tostring(character.id),
+                label = character.name,
+                visual = string.format("illarion:races/race_%d_0", character.race),
+                offline = true,
+            })
+        end
+    end
+    return options
+end)
+
+local function resolveTarget(characterId)
+    characterId = assert(tonumber(characterId), "Invalid character target.")
+    for _, player in ipairs(Players.getOnlinePlayers()) do
+        if player:getControlledEntity() then
+            local character = Character.fromSelenePlayer(player)
+            if character.id == characterId then
+                return character, false
+            end
+        end
+    end
+    for _, character in ipairs(CharacterPersistence.loadAllCharacterSummaries()) do
+        if character.id == characterId then
+            return character, true
+        end
+    end
+    error("Target character no longer exists.")
+end
+
+local function getAdminCharacter(player)
+    if not player:getControlledEntity() then
+        return nil
+    end
+    local character = Character.fromSelenePlayer(player)
+    return character:isAdmin() and character or nil
+end
+
+local function getPositionInFront(character)
+    local offsets = {
+        [Character.north] = { x = 0, y = -1 },
+        [Character.northeast] = { x = 1, y = -1 },
+        [Character.east] = { x = 1, y = 0 },
+        [Character.southeast] = { x = 1, y = 1 },
+        [Character.south] = { x = 0, y = 1 },
+        [Character.southwest] = { x = -1, y = 1 },
+        [Character.west] = { x = -1, y = 0 },
+        [Character.northwest] = { x = -1, y = -1 },
+    }
+    local offset = offsets[character:get_face_to()] or offsets[Character.north]
+    return position(character.pos.x + offset.x, character.pos.y + offset.y, character.pos.z)
+end
+
+local function resolveCoordinate(character, coordinate)
+    return coordinate and position(coordinate.x, coordinate.y, coordinate.z) or getPositionInFront(character)
+end
+
+local function resolveOnlineTarget(characterId)
+    local character, offline = resolveTarget(characterId)
+    assert(not offline, "Target character is no longer online.")
+    return character
+end
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:teleport-to-coordinate",
+    label = "Teleport to Coordinate",
+    description = "Teleport a character to a world coordinate.",
+    parameters = {
+        { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+        { name = "coordinate", label = "Coordinate", type = "coordinate" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        local target = position(parameters.coordinate.x, parameters.coordinate.y, parameters.coordinate.z)
+        if offline then
+            CharacterPersistence.updateOfflineCharacterPosition(character.id, target.x, target.y, target.z)
+        else
+            character:forceWarp(target)
+        end
+        administrator:logAdmin(string.format("Warp %s to Coordinate (%d, %d, %d)", character.name, target.x, target.y, target.z))
+        return string.format("Warped %s to %d, %d, %d.", character.name, target.x, target.y, target.z)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:teleport-to-location",
+    label = "Teleport to Location",
+    description = "Teleport a character to a point of interest.",
+    parameters = {
+        { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+        { name = "location", label = "Location", type = "registry", registry = "illarion:poi" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        local location = assert(Registries.findByName("illarion:poi", parameters.location), "Location no longer exists.")
+        local coordinate = assert(location:getField("coordinate"), "Location has no coordinate.")
+        local target = position(
+            assert(tonumber(coordinate.x), "Location has no X coordinate."),
+            assert(tonumber(coordinate.y), "Location has no Y coordinate."),
+            assert(tonumber(coordinate.z), "Location has no Z coordinate.")
+        )
+        local locationName = location:getMetadata("name") or parameters.location
+        if offline then
+            CharacterPersistence.updateOfflineCharacterPosition(character.id, target.x, target.y, target.z)
+        else
+            character:forceWarp(target)
+        end
+        administrator:logAdmin(string.format(
+            "Teleport %s to %s (%d, %d, %d)",
+            character.name,
+            locationName,
+            target.x,
+            target.y,
+            target.z
+        ))
+        return string.format("Teleported %s to %s.", character.name, locationName)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:bring",
+    label = "Bring",
+    description = "Bring a character to you.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        if offline then
+            CharacterPersistence.updateOfflineCharacterPosition(
+                character.id,
+                administrator.pos.x,
+                administrator.pos.y,
+                administrator.pos.z
+            )
+        else
+            character:warp(administrator.pos)
+        end
+        administrator:logAdmin("Bring " .. character.name)
+        return "Brought " .. character.name .. "."
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:teleport-to-player",
+    label = "Teleport to Player",
+    description = "Teleport to another character.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        local target = offline and position(character.x, character.y, character.z) or character.pos
+        administrator:forceWarp(target)
+        administrator:logAdmin("Teleport to Player " .. character.name)
+        return "Teleported to " .. character.name .. "."
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:change-race",
+    label = "Change Race",
+    description = "Change a character's race.",
+    parameters = {
+        { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+        { name = "race", label = "Race", type = "registry", registry = "illarion:races" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        local race = assert(Registries.findByName("illarion:races", parameters.race), "Race no longer exists.")
+        local raceId = assert(race:getMetadata("id"), "Race has no Illarion ID.")
+        local raceName = race:getMetadata("name") or parameters.race
+        if offline then
+            CharacterPersistence.updateOfflineCharacterRace(character.id, raceId)
+        else
+            character:setRace(raceId)
+        end
+        administrator:logAdmin(string.format("Change %s Race to %s (%d)", character.name, raceName, raceId))
+        return string.format("Changed %s's race to %s.", character.name, raceName)
+    end,
+})
+
+local function changeSkill(player, parameters, setExact)
+    local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+    local character, offline = resolveTarget(parameters.target)
+    local skill = assert(Registries.findByName("illarion:skills", parameters.skill), "Skill no longer exists.")
+    local skillId = assert(skill:getMetadata("id"), "Skill has no Illarion ID.")
+    local skillName = skill:getMetadata("name") or skill:getField("name") or parameters.skill
+    local oldValue, newValue
+    if offline then
+        oldValue, newValue = CharacterPersistence.updateOfflineCharacterSkill(
+            character.id,
+            skillId,
+            parameters.value,
+            setExact
+        )
+    else
+        oldValue = character:getSkill(skillId)
+        if setExact then
+            character:setSkill(skillId, parameters.value, character:getMinorSkill(skillId))
+            newValue = character:getSkill(skillId)
+        else
+            newValue = character:increaseSkill(skillId, parameters.value)
+        end
+    end
+    administrator:logAdmin(string.format(
+        "%s %s Skill %s from %g to %g",
+        setExact and "Set" or "Adjust",
+        character.name,
+        skillName,
+        oldValue,
+        newValue
+    ))
+    return string.format("Changed %s's %s from %g to %g.", character.name, skillName, oldValue, newValue)
+end
+
+local skillParameters = {
+    {
+        name = "target",
+        label = "Target",
+        type = "target",
+        resolver = "illarion:characters",
+    },
+    { name = "skill", label = "Skill", type = "registry", registry = "illarion:skills" },
+}
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:set-skill",
+    label = "Set Skill",
+    description = "Set a character's skill to an exact value.",
+    parameters = {
+        skillParameters[1],
+        skillParameters[2],
+        { name = "value", label = "Value", type = "number", default = 0, min = 0, max = 100 },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        return changeSkill(player, parameters, true)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:adjust-skill",
+    label = "Adjust Skill",
+    description = "Increase or decrease a character's skill.",
+    parameters = {
+        skillParameters[1],
+        skillParameters[2],
+        { name = "value", label = "Delta", type = "number", default = 0, min = -100, max = 100 },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        return changeSkill(player, parameters, false)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:kill",
+    label = "Kill",
+    description = "Kill an online character.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        character:setAttrib("hitpoints", 0)
+        administrator:logAdmin("Kill " .. character.name)
+        return "Killed " .. character.name .. "."
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:destroy-item-on-map",
+    label = "Destroy Item on Map",
+    description = "Destroy the top item stack at a coordinate, or in front of you when omitted.",
+    parameters = {
+        { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local target = resolveCoordinate(administrator, parameters.coordinate)
+        local item = world:getItemOnField(target)
+        assert(item.id ~= 0, "There is no item at that coordinate.")
+        local itemId = item.id
+        local quantity = item.number
+        assert(world:erase(item, quantity), "The item could not be destroyed.")
+        administrator:logAdmin(string.format(
+            "Destroy %d x Item %d at Coordinate (%d, %d, %d)",
+            quantity,
+            itemId,
+            target.x,
+            target.y,
+            target.z
+        ))
+        return string.format("Destroyed %d x item %d.", quantity, itemId)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:toggle-lock",
+    label = "Toggle Lock",
+    description = "Lock or unlock a door at a coordinate, or in front of you when omitted.",
+    parameters = {
+        { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local target = resolveCoordinate(administrator, parameters.coordinate)
+        local item = world:getItemOnField(target)
+        assert(item.id ~= 0, "There is no lock at that coordinate.")
+        local locked = item:getData("doorLock") ~= "locked"
+        item:setData("doorLock", locked and "locked" or "unlocked")
+        assert(world:changeItem(item), "The item's lock could not be changed.")
+        administrator:logAdmin(string.format(
+            "%s Item %d at Coordinate (%d, %d, %d)",
+            locked and "Lock" or "Unlock",
+            item.id,
+            target.x,
+            target.y,
+            target.z
+        ))
+        return string.format("%s item %d.", locked and "Locked" or "Unlocked", item.id)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:play-effect",
+    label = "Play Effect",
+    description = "Play a graphical effect at a coordinate, or in front of you when omitted.",
+    parameters = {
+        { name = "effectId", label = "Effect ID", type = "number", min = 0, step = 1 },
+        { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        assert(parameters.effectId % 1 == 0, "Effect ID must be an integer.")
+        local target = resolveCoordinate(administrator, parameters.coordinate)
+        world:gfx(parameters.effectId, target)
+        administrator:logAdmin(string.format(
+            "Play Effect %d at Coordinate (%d, %d, %d)",
+            parameters.effectId,
+            target.x,
+            target.y,
+            target.z
+        ))
+        return string.format("Played effect %d.", parameters.effectId)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:play-sound",
+    label = "Play Sound",
+    description = "Play a sound at a coordinate, or in front of you when omitted.",
+    parameters = {
+        { name = "sound", label = "Sound", type = "registry", registry = "sounds" },
+        { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local sound = assert(Registries.findByName("sounds", parameters.sound), "Sound no longer exists.")
+        local soundId = assert(tonumber(sound:getMetadata("soundId")), "Sound has no numeric soundId.")
+        local target = resolveCoordinate(administrator, parameters.coordinate)
+        world:makeSound(soundId, target)
+        administrator:logAdmin(string.format(
+            "Play Sound %d at Coordinate (%d, %d, %d)",
+            soundId,
+            target.x,
+            target.y,
+            target.z
+        ))
+        return string.format("Played sound %d.", soundId)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:teach-runes",
+    label = "Teach all Runes",
+    description = "Teach all 32 runes for a character's current magic type.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local magicType = character:getMagicType()
+        for rune = 0, 31 do
+            character:teachMagic(magicType, rune)
+        end
+        administrator:logAdmin(string.format("Teach %s All Runes for Magic Type %d", character.name, magicType))
+        return string.format("Taught %s all runes for magic type %d.", character.name, magicType)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:forget-runes",
+    label = "Forget all Runes",
+    description = "Forget all runes for a character's current magic type.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local magicType = character:getMagicType()
+        MagicManager.ForgetAllMagic(character, magicType)
+        administrator:logAdmin(string.format("Make %s Forget All Runes for Magic Type %d", character.name, magicType))
+        return string.format("Made %s forget all runes for magic type %d.", character.name, magicType)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:change-magic-type",
+    label = "Change Magic Type",
+    description = "Change a character's magic type.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+        },
+        {
+            name = "magicType",
+            label = "Magic Type",
+            type = "registry",
+            registry = "illarion:magic_types",
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local magicType = assert(
+            Registries.findByName("illarion:magic_types", parameters.magicType),
+            "Magic Type no longer exists."
+        )
+        local magicTypeId = assert(tonumber(magicType:getMetadata("id")), "Magic Type has no numeric ID.")
+        local magicTypeName = magicType:getMetadata("name") or parameters.magicType
+        local character, offline = resolveTarget(parameters.target)
+        local oldMagicType
+        if offline then
+            oldMagicType = CharacterPersistence.updateOfflineCharacterMagicType(character.id, magicTypeId)
+        else
+            oldMagicType = character:getMagicType()
+            character:setMagicType(magicTypeId)
+        end
+        administrator:logAdmin(string.format(
+            "Change %s Magic Type from %d to %s (%d)",
+            character.name,
+            oldMagicType,
+            magicTypeName,
+            magicTypeId
+        ))
+        return string.format("Changed %s's magic type from %d to %s.", character.name, oldMagicType, magicTypeName)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:set-attribute",
+    label = "Set Attribute",
+    description = "Set a character's persisted base attribute.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+        },
+        { name = "attribute", label = "Attribute", type = "registry", registry = "illarion:attributes" },
+        { name = "value", label = "Value", type = "number" },
+        { name = "overrideLimits", label = "Override Limits", type = "boolean", default = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local attributeDefinition = assert(
+            Registries.findByName("illarion:attributes", parameters.attribute),
+            "Attribute no longer exists."
+        )
+        local attribute = assert(attributeDefinition:getMetadata("key"), "Attribute has no key.")
+        local attributeName = attributeDefinition:getMetadata("name") or attribute
+        local isBaseAttribute = attributeDefinition:getMetadata("base") == true
+        local character, offline = resolveTarget(parameters.target)
+        local oldValue, newValue
+        if offline then
+            assert(isBaseAttribute, "Only base attributes can be changed for an offline character.")
+            if not parameters.overrideLimits then
+                local race = assert(
+                    Registries.findByMetadata("illarion:races", "id", character.race),
+                    "Race no longer exists."
+                )
+                local titlecaseAttribute = attribute:gsub("^%l", string.upper, 1)
+                local minValue = race:getField("min" .. titlecaseAttribute)
+                local maxValue = race:getField("max" .. titlecaseAttribute)
+                assert(
+                    minValue ~= nil and maxValue ~= nil
+                        and parameters.value >= minValue and parameters.value <= maxValue,
+                    "Value is invalid for the character's race."
+                )
+            end
+            oldValue = CharacterPersistence.updateOfflineCharacterBaseAttribute(character.id, attribute, parameters.value)
+            newValue = parameters.value
+        else
+            assert(isBaseAttribute, "The selected attribute is not a base attribute.")
+            oldValue = character:getBaseAttribute(attribute)
+            if parameters.overrideLimits then
+                AttributeManager.GetAttribute(character, attribute):setValue(parameters.value)
+            else
+                assert(character:setBaseAttribute(attribute, parameters.value), "Value is invalid for the character's race.")
+            end
+            newValue = character:getBaseAttribute(attribute)
+        end
+        administrator:logAdmin(string.format(
+            "Set %s Attribute %s from %g to %g",
+            character.name,
+            attributeName,
+            oldValue,
+            newValue
+        ))
+        return string.format("Set %s's %s from %g to %g.", character.name, attributeName, oldValue, newValue)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:set-attribute-temporarily",
+    label = "Set Attribute temporarily",
+    description = "Temporarily set an online character's effective attribute.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+        { name = "attribute", label = "Attribute", type = "registry", registry = "illarion:attributes" },
+        { name = "value", label = "Value", type = "number" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local attributeDefinition = assert(
+            Registries.findByName("illarion:attributes", parameters.attribute),
+            "Attribute no longer exists."
+        )
+        local attribute = assert(attributeDefinition:getMetadata("key"), "Attribute has no key.")
+        local attributeName = attributeDefinition:getMetadata("name") or attribute
+        local character = resolveOnlineTarget(parameters.target)
+        local oldValue = attribute == "poisonvalue" and character:getPoisonValue()
+            or character:increaseAttrib(attribute, 0)
+        character:setAttrib(attribute, parameters.value)
+        local newValue = attribute == "poisonvalue" and character:getPoisonValue()
+            or character:increaseAttrib(attribute, 0)
+        administrator:logAdmin(string.format(
+            "Temporarily Set %s Attribute %s from %g to %g",
+            character.name,
+            attributeName,
+            oldValue,
+            newValue
+        ))
+        return string.format("Temporarily set %s's %s from %g to %g.", character.name, attributeName, oldValue, newValue)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:heal",
+    label = "Heal",
+    description = "Fully heal or revive an online character.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+        { name = "health", label = "Health", type = "boolean", default = true },
+        { name = "hunger", label = "Hunger", type = "boolean", default = true },
+        { name = "mana", label = "Mana", type = "boolean", default = true },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        assert(not offline, "Target character is no longer online.")
+        local revived = parameters.health and character:increaseAttrib("hitpoints", 0) <= 0
+        if parameters.health then
+            character:setAttrib("hitpoints", 10000)
+            character:setPoisonValue(0)
+        end
+        if parameters.hunger then
+            character:setAttrib("foodlevel", 60000)
+        end
+        if parameters.mana then
+            character:setAttrib("mana", 10000)
+        end
+        administrator:logAdmin(string.format("%s %s", revived and "Revive" or "Heal", character.name))
+        return string.format("%s %s.", revived and "Revived" or "Healed", character.name)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:change-weather",
+    label = "Change Weather",
+    description = "Change global weather.",
+    parameters = {
+        { name = "cloudDensity", label = "Cloud Density", type = "number", required = false, min = 0, max = 100 },
+        { name = "fogDensity", label = "Fog Density", type = "number", required = false, min = 0, max = 100 },
+        { name = "windDirection", label = "Wind Direction", type = "number", required = false, min = -100, max = 100 },
+        { name = "gustStrength", label = "Gust Strength", type = "number", required = false, min = 0, max = 100 },
+        {
+            name = "precipitationStrength",
+            label = "Precipitation Strength",
+            type = "number",
+            required = false,
+            min = 0,
+            max = 100,
+        },
+        {
+            name = "precipitationType",
+            label = "Precipitation Type (0 None, 1 Rain, 2 Snow)",
+            type = "number",
+            required = false,
+            min = 0,
+            max = 2,
+            step = 1,
+        },
+        { name = "thunderstorm", label = "Thunderstorm", type = "number", required = false, min = 0, max = 100 },
+        { name = "temperature", label = "Temperature", type = "number", required = false, min = -50, max = 50 },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        if parameters.precipitationType ~= nil then
+            assert(parameters.precipitationType % 1 == 0, "Precipitation Type must be an integer.")
+        end
+        local weather = world.weather
+        local fields = {
+            cloudDensity = "cloud_density",
+            fogDensity = "fog_density",
+            windDirection = "wind_dir",
+            gustStrength = "gust_strength",
+            precipitationStrength = "percipitation_strength",
+            precipitationType = "percipitation_type",
+            thunderstorm = "thunderstorm",
+            temperature = "temperature",
+        }
+        local changed = false
+        for parameterName, weatherField in pairs(fields) do
+            if parameters[parameterName] ~= nil then
+                weather[weatherField] = parameters[parameterName]
+                changed = true
+            end
+        end
+        assert(changed, "At least one weather value is required.")
+        world:setWeather(weather)
+        administrator:logAdmin(string.format(
+            "Change Weather: clouds %g, fog %g, wind %g, gust %g, precipitation %g/%g, thunder %g, temperature %g",
+            weather.cloud_density,
+            weather.fog_density,
+            weather.wind_dir,
+            weather.gust_strength,
+            weather.percipitation_type,
+            weather.percipitation_strength,
+            weather.thunderstorm,
+            weather.temperature
+        ))
+        return "Changed the weather."
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:give-item",
+    label = "Give Item",
+    description = "Give an item to an online character.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+        { name = "item", label = "Item", type = "registry", registry = "illarion:items", deferred = true },
+        { name = "quantity", label = "Quantity", type = "number", default = 1, min = 1, step = 1 },
+        { name = "quality", label = "Quality", type = "number", default = 333, min = 0, step = 1 },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        assert(parameters.quantity % 1 == 0, "Quantity must be an integer.")
+        assert(parameters.quality % 1 == 0, "Quality must be an integer.")
+        local character, offline = resolveTarget(parameters.target)
+        assert(not offline, "Target character is no longer online.")
+        local item = assert(Registries.findByName("illarion:items", parameters.item), "Item no longer exists.")
+        local itemId = assert(item:getMetadata("id"), "Item has no Illarion ID.")
+        local itemName = item:getField("name")
+        if itemName == nil or itemName == "" then
+            itemName = parameters.item
+        end
+        local rest = character:createItem(itemId, parameters.quantity, parameters.quality, {})
+        local given = parameters.quantity - rest
+        administrator:logAdmin(string.format(
+            "Give %s %d x %s (%d), Quality %d%s",
+            character.name,
+            given,
+            itemName,
+            itemId,
+            parameters.quality,
+            rest > 0 and string.format(" (%d did not fit)", rest) or ""
+        ))
+        if rest > 0 then
+            return string.format("Gave %s %d x %s; %d did not fit.", character.name, given, itemName, rest)
+        end
+        return string.format("Gave %s %d x %s.", character.name, given, itemName)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:spawn-monster",
+    label = "Spawn Monster",
+    description = "Spawn a monster at a world coordinate.",
+    parameters = {
+        { name = "monster", label = "Monster", type = "registry", registry = "illarion:monsters" },
+        { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local monster = assert(
+            Registries.findByName("illarion:monsters", parameters.monster),
+            "Monster no longer exists."
+        )
+        local monsterId = assert(monster:getMetadata("id"), "Monster has no Illarion ID.")
+        local coordinate = parameters.coordinate
+        local target = coordinate and position(coordinate.x, coordinate.y, coordinate.z)
+            or getPositionInFront(administrator)
+        world:createMonster(monsterId, target, 0)
+        administrator:logAdmin(string.format(
+            "Spawn Monster %d at Coordinate (%d, %d, %d)",
+            monsterId,
+            target.x,
+            target.y,
+            target.z
+        ))
+        return string.format("Spawned monster %d at %d, %d, %d.", monsterId, target.x, target.y, target.z)
+    end,
+})
