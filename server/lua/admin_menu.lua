@@ -258,6 +258,32 @@ AdminMenu.registerAction({
 })
 
 AdminMenu.registerAction({
+    id = "illarion-admin-menu:toggle-invisibility",
+    label = "Toggle Invisibility",
+    description = "Toggle whether an online character is visible or not.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local enabled = not character.isinvisible
+        character.isinvisible = enabled
+        administrator:logAdmin(string.format("Turn %s Invisibility %s", character.name, enabled and "On" or "Off"))
+        return string.format("Invisibility %s for %s.", enabled and "enabled" or "disabled", character.name)
+    end,
+})
+
+AdminMenu.registerAction({
     id = "illarion-admin-menu:toggle-godmode",
     label = "Toggle Godmode",
     description = "Toggle whether an online character can receive damage.",
