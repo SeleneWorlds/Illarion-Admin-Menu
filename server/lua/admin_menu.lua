@@ -334,6 +334,36 @@ AdminMenu.registerAction({
     end,
 })
 
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:change-name",
+    label = "Change Name",
+    description = "Change a character's name.",
+    parameters = {
+        { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+        { name = "name", label = "New Name", type = "string" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        local name = parameters.name
+        assert(
+            #name >= 2 and #name <= 50 and not name:match("^%s") and not name:match("%s$") and not name:match("%c"),
+            "Use a name of 2-50 characters without leading or trailing spaces."
+        )
+        local oldName = character.name
+        CharacterPersistence.updateCharacterName(character.id, name)
+        if not offline then
+            character.SeleneEntity:setName(name)
+            character.SeleneEntity:updateVisuals()
+        end
+        administrator:logAdmin(string.format("Change %s Name to %s", oldName, name))
+        return string.format("Changed %s's name to %s.", oldName, name)
+    end,
+})
+
 local function changeSkill(player, parameters, setExact)
     local administrator = assert(getAdminCharacter(player), "Administrator access required.")
     local character, offline = resolveTarget(parameters.target)
