@@ -364,6 +364,42 @@ AdminMenu.registerAction({
     end,
 })
 
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:change-sex",
+    label = "Change Sex",
+    description = "Change a character's sex.",
+    parameters = {
+        { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+        {
+            name = "sex",
+            label = "Sex",
+            type = "enum",
+            options = {
+                { value = "male", label = "Male" },
+                { value = "female", label = "Female" },
+            },
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        local newSex = parameters.sex
+        local oldSex = offline and character.sex
+            or (character:increaseAttrib("sex", 0) == Character.female and "female" or "male")
+        if offline then
+            CharacterPersistence.updateOfflineCharacterSex(character.id, newSex)
+        else
+            character:setAttrib("sex", newSex == "female" and Character.female or Character.male)
+            character.SeleneEntity:updateVisuals()
+        end
+        administrator:logAdmin(string.format("Change %s Sex from %s to %s", character.name, oldSex, newSex))
+        return string.format("Changed %s from %s to %s.", character.name, oldSex, newSex)
+    end,
+})
+
 local function changeSkill(player, parameters, setExact)
     local administrator = assert(getAdminCharacter(player), "Administrator access required.")
     local character, offline = resolveTarget(parameters.target)
