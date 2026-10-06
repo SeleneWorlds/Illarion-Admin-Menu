@@ -548,9 +548,13 @@ AdminMenu.registerAction({
         local target = resolveCoordinate(administrator, parameters.coordinate)
         local item = world:getItemOnField(target)
         assert(item.id ~= 0, "There is no lock at that coordinate.")
-        local locked = item:getData("doorLock") ~= "locked"
+        local locked = item.quality == 233
+        item.quality = locked and 333 or 233
+        if locked and item.data == 0 then
+            item.data = math.random(1, 999999999)
+        end
         item:setData("doorLock", locked and "locked" or "unlocked")
-        assert(world:changeItem(item), "The item's lock could not be changed.")
+        world:changeItem(item)
         administrator:logAdmin(string.format(
             "%s Item %d at Coordinate (%d, %d, %d)",
             locked and "Lock" or "Unlock",
