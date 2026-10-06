@@ -188,7 +188,7 @@ AdminMenu.registerAction({
 AdminMenu.registerAction({
     id = "illarion-admin-menu:talk-to",
     label = "Talk to",
-    description = "Send a private admin message to an online character.",
+    description = "Send a private inform message to an online character.",
     parameters = {
         {
             name = "target",
