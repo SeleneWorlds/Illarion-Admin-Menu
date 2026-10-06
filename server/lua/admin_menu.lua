@@ -140,6 +140,17 @@ end
 
 local moonlightEditorOk, moonlightEditor = pcall(require, "moonlight-editor.server.lua.editor")
 if moonlightEditorOk then
+    moonlightEditor.registerCoordinateLookup(function(coordinate)
+        for _, npc in pairs(Registries.findAll("illarion:npcs")) do
+            if npc:getField("x") == coordinate.x
+                and npc:getField("y") == coordinate.y
+                and npc:getField("z") == coordinate.z then
+                return npc:getSourcePath()
+            end
+        end
+        return nil
+    end)
+
     AdminMenu.registerAction({
         id = "illarion-admin-menu:toggle-editor",
         label = "Toggle Editor",
