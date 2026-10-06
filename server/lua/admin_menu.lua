@@ -160,6 +160,32 @@ AdminMenu.registerAction({
 })
 
 AdminMenu.registerAction({
+    id = "illarion-admin-menu:toggle-clipping",
+    label = "Toggle Clipping",
+    description = "Toggle whether an online character collides with solid objects.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local enabled = not character:getClippingActive()
+        character:setClippingActive(enabled)
+        administrator:logAdmin(string.format("Turn %s Clipping %s", character.name, enabled and "On" or "Off"))
+        return string.format("Clipping %s for %s.", enabled and "enabled" or "disabled", character.name)
+    end,
+})
+
+AdminMenu.registerAction({
     id = "illarion-admin-menu:teleport-to-coordinate",
     label = "Teleport to Coordinate",
     description = "Teleport a character to a world coordinate.",
