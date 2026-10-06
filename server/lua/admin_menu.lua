@@ -20,6 +20,10 @@ AdminMenu.registerRegistryVisualResolver("illarion:items", function(item)
     return item:getField("visual")
 end)
 
+AdminMenu.registerRegistryVisualResolver("illarion:gfx", function(gfx)
+    return gfx:getField("visual")
+end)
+
 local function onlineCharacterOptions(initiatingPlayer)
     local options = {}
     local initiatingEntity = initiatingPlayer and initiatingPlayer:getControlledEntity()
@@ -619,7 +623,7 @@ AdminMenu.registerAction({
     label = "Play Effect",
     description = "Play a graphical effect at a coordinate, or in front of you when omitted.",
     parameters = {
-        { name = "effectId", label = "Effect ID", type = "number", min = 0, step = 1 },
+        { name = "effect", label = "Effect", type = "registry", registry = "illarion:gfx" },
         { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
     },
     isAvailable = function(player)
@@ -627,17 +631,18 @@ AdminMenu.registerAction({
     end,
     execute = function(player, parameters)
         local administrator = assert(getAdminCharacter(player), "Administrator access required.")
-        assert(parameters.effectId % 1 == 0, "Effect ID must be an integer.")
+        local gfx = assert(Registries.findByName("illarion:gfx", parameters.effect), "Effect no longer exists.")
+        local effectId = assert(tonumber(gfx:getMetadata("gfxId")), "Effect has no numeric gfxId.")
         local target = resolveCoordinate(administrator, parameters.coordinate)
-        world:gfx(parameters.effectId, target)
+        world:gfx(effectId, target)
         administrator:logAdmin(string.format(
             "Play Effect %d at Coordinate (%d, %d, %d)",
-            parameters.effectId,
+            effectId,
             target.x,
             target.y,
             target.z
         ))
-        return string.format("Played effect %d.", parameters.effectId)
+        return string.format("Played effect %d.", effectId)
     end,
 })
 
