@@ -4,6 +4,7 @@ local Players = require("selene.players")
 local CharacterPersistence = require("illarion-script-loader.server.lua.lib.characterPersistence")
 local AttributeManager = require("illarion-script-loader.server.lua.lib.attributeManager")
 local MagicManager = require("illarion-script-loader.server.lua.lib.magicManager")
+local AdminPersistence = require("illarion-script-loader.server.lua.lib.adminPersistence")
 
 AdminMenu.registerRegistryVisualResolver("illarion:races", function(race)
     local raceId = race:getMetadata("id")
@@ -116,6 +117,54 @@ local function requireMessage(message)
     assert(message:find("%S"), "Message must not be empty.")
     return message
 end
+
+local function changeAdminAccess(player, targetId, grant)
+    local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+    local target = resolveTarget(targetId)
+    local userId = CharacterPersistence.getUserIdForCharacter(target.id)
+    local verb = grant and "Grant Admin" or "Revoke Admin"
+    administrator:logAdmin(string.format("%s: %s (%s)", verb, target.name, userId))
+    local changed
+    if grant then
+        changed = AdminPersistence.grant(userId)
+    else
+        changed = AdminPersistence.revoke(userId)
+    end
+    if not changed then
+        return string.format("%s's account was already %s.", target.name, grant and "an administrator" or "not an administrator")
+    end
+    return string.format("%s access for %s's account.", grant and "Granted administrator" or "Revoked administrator", target.name)
+end
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:grant-admin",
+    label = "Grant Admin",
+    description = "Grant administrator access to the account that owns a character.",
+    parameters = {
+        { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        return changeAdminAccess(player, parameters.target, true)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:revoke-admin",
+    label = "Revoke Admin",
+    description = "Revoke administrator access from the account that owns a character.",
+    parameters = {
+        { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        return changeAdminAccess(player, parameters.target, false)
+    end,
+})
 
 AdminMenu.registerAction({
     id = "illarion-admin-menu:broadcast-message",
