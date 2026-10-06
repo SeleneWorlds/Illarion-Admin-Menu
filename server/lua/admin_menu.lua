@@ -6,6 +6,7 @@ local AttributeManager = require("illarion-script-loader.server.lua.lib.attribut
 local MagicManager = require("illarion-script-loader.server.lua.lib.magicManager")
 local AdminPersistence = require("illarion-script-loader.server.lua.lib.adminPersistence")
 local MonsterManager = require("illarion-script-loader.server.lua.lib.monsterManager")
+local CharacterManager = require("illarion-script-loader.server.lua.lib.characterManager")
 
 AdminMenu.registerRegistryVisualResolver("illarion:races", function(race)
     local raceId = race:getMetadata("id")
@@ -253,6 +254,32 @@ AdminMenu.registerAction({
         character:setClippingActive(enabled)
         administrator:logAdmin(string.format("Turn %s Clipping %s", character.name, enabled and "On" or "Off"))
         return string.format("Clipping %s for %s.", enabled and "enabled" or "disabled", character.name)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:toggle-godmode",
+    label = "Toggle Godmode",
+    description = "Toggle whether an online character can receive damage.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local enabled = not CharacterManager.isGodMode(character)
+        CharacterManager.setGodMode(character, enabled)
+        administrator:logAdmin(string.format("Turn %s Godmode %s", character.name, enabled and "On" or "Off"))
+        return string.format("Godmode %s for %s.", enabled and "enabled" or "disabled", character.name)
     end,
 })
 
