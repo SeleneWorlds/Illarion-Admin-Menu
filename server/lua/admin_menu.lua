@@ -140,12 +140,37 @@ end
 
 local moonlightEditorOk, moonlightEditor = pcall(require, "moonlight-editor.server.lua.editor")
 if moonlightEditorOk then
+    moonlightEditor.registerGizmoProvider(function()
+        local gizmos = {}
+        for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
+            local x, y, z = spawn:getField("x"), spawn:getField("y"), spawn:getField("z")
+            if type(x) == "number" and type(y) == "number" and type(z) == "number" then
+                local id = spawn:getMetadata("id") or spawn:getName()
+                table.insert(gizmos, {
+                    id = "illarion:monster-spawn:" .. tostring(id),
+                    label = spawn:getName(),
+                    coordinate = { x = x, y = y, z = z },
+                    path = spawn:getSourcePath(),
+                    color = "#e05252",
+                })
+            end
+        end
+        return gizmos
+    end)
+
     moonlightEditor.registerCoordinateLookup(function(coordinate)
         for _, npc in pairs(Registries.findAll("illarion:npcs")) do
             if npc:getField("x") == coordinate.x
                 and npc:getField("y") == coordinate.y
                 and npc:getField("z") == coordinate.z then
                 return npc:getSourcePath()
+            end
+        end
+        for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
+            if spawn:getField("x") == coordinate.x
+                and spawn:getField("y") == coordinate.y
+                and spawn:getField("z") == coordinate.z then
+                return spawn:getSourcePath()
             end
         end
         return nil
