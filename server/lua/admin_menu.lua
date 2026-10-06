@@ -108,6 +108,57 @@ local function resolveOnlineTarget(characterId)
     return character
 end
 
+local function requireMessage(message)
+    assert(message:find("%S"), "Message must not be empty.")
+    return message
+end
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:broadcast-message",
+    label = "Broadcast Message",
+    description = "Send a message to every online player.",
+    parameters = {
+        { name = "message", label = "Message", type = "message" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local message = requireMessage(parameters.message)
+        world:broadcast(message, message)
+        administrator:logAdmin("Broadcast Message: " .. message)
+        return "Broadcast message sent."
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:talk-to",
+    label = "Talk to",
+    description = "Send a private admin message to an online character.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+        { name = "message", label = "Message", type = "message" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local message = requireMessage(parameters.message)
+        character:inform(message)
+        administrator:logAdmin(string.format("Talk to %s: %s", character.name, message))
+        return "Message sent to " .. character.name .. "."
+    end,
+})
+
 AdminMenu.registerAction({
     id = "illarion-admin-menu:teleport-to-coordinate",
     label = "Teleport to Coordinate",
