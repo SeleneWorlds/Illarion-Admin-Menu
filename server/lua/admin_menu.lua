@@ -568,6 +568,53 @@ AdminMenu.registerAction({
 })
 
 AdminMenu.registerAction({
+    id = "illarion-admin-menu:get-key",
+    label = "Get Key",
+    description = "Get a key for the lock at a coordinate, or in front of you when omitted.",
+    parameters = {
+        {
+            name = "key",
+            label = "Key",
+            type = "registry",
+            registry = "illarion:items",
+            deferred = false,
+            filter = function(item)
+                return item:getField("script") == "item.keys"
+            end,
+        },
+        { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local target = resolveCoordinate(administrator, parameters.coordinate)
+        local item = world:getItemOnField(target)
+        assert(item.id ~= 0, "There is no lock at that coordinate.")
+        local lockId = item.data
+        if lockId == 0 then
+            lockId = math.random(1, 999999999)
+            item.data = lockId
+            world:changeItem(item)
+        end
+        local key = assert(Registries.findByName("illarion:items", parameters.key), "Key no longer exists.")
+        local keyId = assert(key:getMetadata("id"), "Key has no Illarion ID.")
+        local rest = administrator:createItem(keyId, 1, 333, lockId)
+        assert(rest == 0, "The key could not be created because your inventory is full.")
+        administrator:logAdmin(string.format(
+            "Get Key for Item %d at Coordinate (%d, %d, %d), Lock ID %d",
+            item.id,
+            target.x,
+            target.y,
+            target.z,
+            lockId
+        ))
+        return string.format("Created a key for lock %d.", lockId)
+    end,
+})
+
+AdminMenu.registerAction({
     id = "illarion-admin-menu:play-effect",
     label = "Play Effect",
     description = "Play a graphical effect at a coordinate, or in front of you when omitted.",
