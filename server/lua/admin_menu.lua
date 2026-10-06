@@ -6,6 +6,7 @@ local CharacterPersistence = require("illarion-script-loader.server.lua.lib.char
 local AttributeManager = require("illarion-script-loader.server.lua.lib.attributeManager")
 local MagicManager = require("illarion-script-loader.server.lua.lib.magicManager")
 local AdminPersistence = require("illarion-script-loader.server.lua.lib.adminPersistence")
+local MonsterManager = require("illarion-script-loader.server.lua.lib.monsterManager")
 
 AdminMenu.registerRegistryVisualResolver("illarion:races", function(race)
     local raceId = race:getMetadata("id")
@@ -1169,5 +1170,28 @@ AdminMenu.registerAction({
             target.z
         ))
         return string.format("Spawned monster %d at %d, %d, %d.", monsterId, target.x, target.y, target.z)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:despawn-monsters-in-range",
+    label = "Despawn Monsters in Range",
+    description = "Despawn all monsters within range of you.",
+    parameters = {
+        { name = "range", label = "Range", type = "number", default = 20, min = 0, step = 1 },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local range = parameters.range
+        assert(range % 1 == 0, "Range must be an integer.")
+        local monsters = world:getMonstersInRangeOf(administrator.pos, range)
+        for _, monster in ipairs(monsters) do
+            MonsterManager.Remove(monster.SeleneEntity)
+        end
+        administrator:logAdmin(string.format("Despawn %d Monsters in Range %d", #monsters, range))
+        return string.format("Despawned %d monster%s.", #monsters, #monsters == 1 and "" or "s")
     end,
 })
