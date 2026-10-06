@@ -1,4 +1,5 @@
 local AdminMenu = require("moonlight-admin.server.lua.admin_menu")
+local Editor = require("moonlight-editor.server.lua.editor")
 local Registries = require("selene.registries")
 local Players = require("selene.players")
 local CharacterPersistence = require("illarion-script-loader.server.lua.lib.characterPersistence")
@@ -135,6 +136,20 @@ local function changeAdminAccess(player, targetId, grant)
     end
     return string.format("%s access for %s's account.", grant and "Granted administrator" or "Revoked administrator", target.name)
 end
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:toggle-editor",
+    label = "Toggle Editor",
+    description = "Enter or leave the editor.",
+    parameters = {},
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player)
+        local enabled = Editor.toggle(player)
+        return enabled and "Editor enabled." or "Editor disabled."
+    end,
+})
 
 AdminMenu.registerAction({
     id = "illarion-admin-menu:grant-admin",
