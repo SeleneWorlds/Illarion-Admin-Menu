@@ -169,9 +169,10 @@ if moonlightEditorOk then
 
     moonlightEditor.registerCoordinateLookup(function(coordinate)
         for _, npc in pairs(Registries.findAll("illarion:npcs")) do
-            if npc:getField("x") == coordinate.x
-                and npc:getField("y") == coordinate.y
-                and npc:getField("z") == coordinate.z then
+            local npcCoordinate = npc:getField("coordinate")
+            if npcCoordinate.x == coordinate.x
+                and npcCoordinate.y == coordinate.y
+                and npcCoordinate.z == coordinate.z then
                 return npc:getSourcePath()
             end
         end
