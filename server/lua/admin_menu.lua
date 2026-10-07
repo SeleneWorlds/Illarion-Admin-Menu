@@ -140,6 +140,14 @@ end
 
 local moonlightEditorOk, moonlightEditor = pcall(require, "moonlight-editor.server.lua.editor")
 if moonlightEditorOk then
+    local function monsterSpawnVisual(spawn)
+        local monsterName = next(spawn:getField("monsters") or {})
+        local monster = monsterName and Registries.findByName("illarion:monsters", monsterName)
+        local race = monster and Registries.findByName("illarion:races", monster:getField("race"))
+        local raceId = race and race:getMetadata("id")
+        return raceId and string.format("illarion:races/race_%d_0", raceId) or nil
+    end
+
     moonlightEditor.registerGizmoProvider(function()
         local gizmos = {}
         for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
@@ -152,6 +160,7 @@ if moonlightEditorOk then
                     coordinate = { x = x, y = y, z = z },
                     path = spawn:getSourcePath(),
                     color = "#e05252",
+                    visual = monsterSpawnVisual(spawn),
                 })
             end
         end
