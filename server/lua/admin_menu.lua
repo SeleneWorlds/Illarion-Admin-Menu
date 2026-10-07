@@ -170,6 +170,31 @@ if moonlightEditorOk then
         return gizmos
     end)
 
+    moonlightEditor.registerGizmoProvider(function(player, coordinate)
+        local entity = player:getCameraEntity() or player:getControlledEntity()
+        local dimension = entity and entity:getDimension()
+        if not dimension then return {} end
+        local gizmos = {}
+        for _, entry in ipairs(dimension:getAnnotationsInRange(coordinate, 64)) do
+            local coordinate = entry.coordinate
+            local tiles = dimension:getTilesAt(coordinate)
+            local tile = tiles[#tiles]
+            local keys = {}
+            for key in pairs(entry.annotations) do
+                table.insert(keys, key)
+            end
+            table.sort(keys)
+            table.insert(gizmos, {
+                id = string.format("illarion:annotations:%d:%d:%d", coordinate.x, coordinate.y, coordinate.z),
+                label = table.concat(keys, ", "),
+                coordinate = coordinate,
+                color = "#e8b84a",
+                visual = tile and tile:getVisual() or nil,
+            })
+        end
+        return gizmos
+    end)
+
     moonlightEditor.registerCoordinateLookup(function(coordinate, scope)
         local function matchesScope(path)
             if not scope then return true end
