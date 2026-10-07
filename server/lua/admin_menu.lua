@@ -170,7 +170,16 @@ if moonlightEditorOk then
         return gizmos
     end)
 
-    moonlightEditor.registerCoordinateLookup(function(coordinate)
+    moonlightEditor.registerCoordinateLookup(function(coordinate, scope)
+        local function matchesScope(path)
+            if not scope then return true end
+            if type(path) ~= "string" then return false end
+            local namespace, registry = path:match("/common/data/([^/]+)/([^/]+)/")
+            if not namespace then
+                namespace, registry = path:match("/server/data/([^/]+)/([^/]+)/")
+            end
+            return namespace and namespace .. ":" .. registry == scope
+        end
         local entities = Dimensions.getDefault():getEntitiesAt(coordinate)
         for _, entity in ipairs(entities) do
             if entity:hasTag("illarion:character") then
@@ -181,11 +190,12 @@ if moonlightEditorOk then
                 elseif charData[DataFields.CharacterType] == Character.monster then
                     definition = charData[DataFields.Monster]
                 end
-                if definition then
+                if definition and matchesScope(definition:getSourcePath()) then
                     return definition:getSourcePath()
                 end
             end
         end
+        if scope and scope ~= "illarion:monster_spawns" then return nil end
         for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
             if spawn:getField("x") == coordinate.x
                 and spawn:getField("y") == coordinate.y
