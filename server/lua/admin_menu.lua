@@ -16,13 +16,13 @@ local function raceVisual(race)
     return raceId and string.format("illarion:races/race_%d_0", raceId) or nil
 end
 
-AdminMenu.registerRegistryVisualResolver("illarion:races", raceVisual)
-
-AdminMenu.registerRegistryVisualResolver("illarion:monsters", function(monster)
+local function monsterVisual(monster)
     local race = Registries.findByName("illarion:races", monster:getField("race"))
-    local raceId = race and race:getMetadata("id")
-    return raceId and string.format("illarion:races/race_%d_0", raceId) or nil
-end)
+    return race and raceVisual(race) or nil
+end
+
+AdminMenu.registerRegistryVisualResolver("illarion:races", raceVisual)
+AdminMenu.registerRegistryVisualResolver("illarion:monsters", monsterVisual)
 
 AdminMenu.registerRegistryVisualResolver("illarion:items", function(item)
     return item:getField("visual")
@@ -146,13 +146,12 @@ end
 local moonlightEditorOk, moonlightEditor = pcall(require, "moonlight-editor.server.lua.editor")
 if moonlightEditorOk then
     moonlightEditor.registerRegistryVisualResolver("illarion:races", raceVisual)
+    moonlightEditor.registerRegistryVisualResolver("illarion:monsters", monsterVisual)
 
     local function monsterSpawnVisual(spawn)
         local monsterName = next(spawn:getField("monsters") or {})
         local monster = monsterName and Registries.findByName("illarion:monsters", monsterName)
-        local race = monster and Registries.findByName("illarion:races", monster:getField("race"))
-        local raceId = race and race:getMetadata("id")
-        return raceId and string.format("illarion:races/race_%d_0", raceId) or nil
+        return monster and monsterVisual(monster) or nil
     end
 
     moonlightEditor.registerGizmoProvider(function()
