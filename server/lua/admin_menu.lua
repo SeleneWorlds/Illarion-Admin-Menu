@@ -1,6 +1,9 @@
 local AdminMenu = require("moonlight-admin.server.lua.admin_menu")
 local Registries = require("selene.registries")
 local Players = require("selene.players")
+local Dimensions = require("selene.dimensions")
+local DataKeys = require("illarion-script-loader.server.lua.lib.datakeys")
+local DataFields = require("illarion-script-loader.server.lua.lib.dataFields")
 local CharacterPersistence = require("illarion-script-loader.server.lua.lib.characterPersistence")
 local AttributeManager = require("illarion-script-loader.server.lua.lib.attributeManager")
 local MagicManager = require("illarion-script-loader.server.lua.lib.magicManager")
@@ -168,12 +171,19 @@ if moonlightEditorOk then
     end)
 
     moonlightEditor.registerCoordinateLookup(function(coordinate)
-        for _, npc in pairs(Registries.findAll("illarion:npcs")) do
-            local npcCoordinate = npc:getField("coordinate")
-            if npcCoordinate.x == coordinate.x
-                and npcCoordinate.y == coordinate.y
-                and npcCoordinate.z == coordinate.z then
-                return npc:getSourcePath()
+        local entities = Dimensions.getDefault():getEntitiesAt(coordinate)
+        for _, entity in ipairs(entities) do
+            if entity:hasTag("illarion:character") then
+                local charData = entity:getRuntimeData(DataKeys.Character)
+                local definition
+                if charData[DataFields.CharacterType] == Character.npc then
+                    definition = charData[DataFields.NPC]
+                elseif charData[DataFields.CharacterType] == Character.monster then
+                    definition = charData[DataFields.Monster]
+                end
+                if definition then
+                    return definition:getSourcePath()
+                end
             end
         end
         for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
