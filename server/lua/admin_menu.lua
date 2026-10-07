@@ -190,13 +190,37 @@ if moonlightEditorOk then
                 label = table.concat(keys, ", "),
                 coordinate = coordinate,
                 color = "#e8b84a",
+                lookup = entry.annotations["illarion:warp"] ~= nil,
                 visual = tile and tile:getVisual() or nil,
             })
         end
         return gizmos
     end)
 
-    moonlightEditor.registerCoordinateLookup(function(coordinate, scope)
+    moonlightEditor.registerCoordinateLookup(function(coordinate, scope, player)
+        local entity = player and (player:getCameraEntity() or player:getControlledEntity())
+        local dimension = entity and entity:getDimension()
+        local warp = not scope and dimension and dimension:getAnnotationAt(coordinate, "illarion:warp")
+        if warp then
+            return {
+                title = "Warp destination",
+                schema = { destination = "coordinate" },
+                values = { destination = { x = warp.x, y = warp.y, z = warp.z } },
+                update = function(values)
+                    local destination = values.destination
+                    assert(type(destination) == "table", "Destination must be a coordinate.")
+                    for _, axis in ipairs({ "x", "y", "z" }) do
+                        local value = destination[axis]
+                        assert(type(value) == "number" and value % 1 == 0 and math.abs(value) <= 2147483647,
+                            "Destination coordinates must be 32-bit integers.")
+                    end
+                    assert(dimension:getAnnotationAt(coordinate, "illarion:warp"), "Warp no longer exists.")
+                    dimension:annotateTile(coordinate, "illarion:warp", {
+                        x = destination.x, y = destination.y, z = destination.z,
+                    })
+                end,
+            }
+        end
         local function matchesScope(path)
             if not scope then return true end
             if type(path) ~= "string" then return false end
