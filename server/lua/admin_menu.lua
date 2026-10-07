@@ -158,18 +158,16 @@ if moonlightEditorOk then
     moonlightEditor.registerGizmoProvider(function()
         local gizmos = {}
         for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
-            local x, y, z = spawn:getField("x"), spawn:getField("y"), spawn:getField("z")
-            if type(x) == "number" and type(y) == "number" and type(z) == "number" then
-                local id = spawn:getMetadata("id") or spawn:getName()
-                table.insert(gizmos, {
-                    id = "illarion:monster-spawn:" .. tostring(id),
-                    label = spawn:getName(),
-                    coordinate = { x = x, y = y, z = z },
-                    path = spawn:getSourcePath(),
-                    color = "#e05252",
-                    visual = monsterSpawnVisual(spawn),
-                })
-            end
+            local coordinate = spawn:getField("coordinate")
+            local id = spawn:getMetadata("id") or spawn:getName()
+            table.insert(gizmos, {
+                id = "illarion:monster-spawn:" .. tostring(id),
+                label = spawn:getName(),
+                coordinate = coordinate,
+                path = spawn:getSourcePath(),
+                color = "#e05252",
+                visual = monsterSpawnVisual(spawn),
+            })
         end
         return gizmos
     end)
@@ -226,9 +224,10 @@ if moonlightEditorOk then
         end
         if scope and scope ~= "illarion:monster_spawns" then return nil end
         for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
-            if spawn:getField("x") == coordinate.x
-                and spawn:getField("y") == coordinate.y
-                and spawn:getField("z") == coordinate.z then
+            local spawnCoordinate = spawn:getField("coordinate")
+            if spawnCoordinate and spawnCoordinate.x == coordinate.x
+                and spawnCoordinate.y == coordinate.y
+                and spawnCoordinate.z == coordinate.z then
                 return spawn:getSourcePath()
             end
         end
