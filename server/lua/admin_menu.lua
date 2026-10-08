@@ -1110,8 +1110,9 @@ AdminMenu.registerAction({
                     "Race no longer exists."
                 )
                 local titlecaseAttribute = attribute:gsub("^%l", string.upper, 1)
-                local minValue = race:getField("min" .. titlecaseAttribute)
-                local maxValue = race:getField("max" .. titlecaseAttribute)
+                local range = race:getField(attribute)
+                local minValue = range and range.min or race:getField("min" .. titlecaseAttribute)
+                local maxValue = range and range.max or race:getField("max" .. titlecaseAttribute)
                 assert(
                     minValue ~= nil and maxValue ~= nil
                         and parameters.value >= minValue and parameters.value <= maxValue,
