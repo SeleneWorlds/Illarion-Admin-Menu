@@ -163,6 +163,9 @@ if moonlightEditorOk then
 
     moonlightEditor.registerRegistryVisualResolver("illarion:races", raceVisual)
     moonlightEditor.registerRegistryVisualResolver("illarion:monsters", monsterVisual)
+    moonlightEditor.registerRegistryVisualResolver("illarion:items", function(item)
+        return item:getField("visual")
+    end)
 
     local function monsterSpawnVisual(spawn)
         local monsterName = next(spawn:getField("monsters") or {})
