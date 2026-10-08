@@ -208,11 +208,40 @@ if moonlightEditorOk then
         local function matchesScope(path)
             if not scope then return true end
             if type(path) ~= "string" then return false end
-            local namespace, registry = path:match("/common/data/([^/]+)/([^/]+)/")
+            local namespace, entry = path:match("^[^/]+/common/data/([^/]+)/[^/]+/(.+)%.json$")
             if not namespace then
-                namespace, registry = path:match("/server/data/([^/]+)/([^/]+)/")
+                namespace, entry = path:match("^[^/]+/server/data/([^/]+)/[^/]+/(.+)%.json$")
             end
-            return namespace and namespace .. ":" .. registry == scope
+            if not namespace then return false end
+            local ok, resource = pcall(Registries.findByName, scope, namespace .. ":" .. entry)
+            return ok and resource and resource:getSourcePath() == path
+        end
+        if scope then
+            local lookupDimension = dimension or Dimensions.getDefault()
+            local scopedEntities = lookupDimension:getEntitiesAt(coordinate)
+            for _, scopedEntity in ipairs(scopedEntities) do
+                local definition = scopedEntity:getEntityDefinition()
+                if matchesScope(definition:getSourcePath()) then
+                    return definition:getSourcePath()
+                end
+                if scope == "illarion:items" then
+                    local itemId = definition:getMetadata("itemId")
+                    local item = itemId and Registries.findByMetadata("illarion:items", "id", itemId)
+                    if item then return item:getSourcePath() end
+                end
+            end
+            local tiles = lookupDimension:getTilesAt(coordinate)
+            for i = #tiles, 1, -1 do
+                local definition = tiles[i]:getDefinition()
+                if matchesScope(definition:getSourcePath()) then
+                    return definition:getSourcePath()
+                end
+                if scope == "illarion:items" then
+                    local itemId = definition:getMetadata("itemId")
+                    local item = itemId and Registries.findByMetadata("illarion:items", "id", itemId)
+                    if item then return item:getSourcePath() end
+                end
+            end
         end
         local entities = Dimensions.getDefault():getEntitiesAt(coordinate)
         for _, entity in ipairs(entities) do
