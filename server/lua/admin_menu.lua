@@ -156,6 +156,54 @@ if moonlightEditorOk then
         return monster and monsterVisual(monster) or nil
     end
 
+    moonlightEditor.registerGoToProvider(function(player)
+        if not getAdminCharacter(player) then return {} end
+        local targets = {}
+        for _, poi in pairs(Registries.findAll("illarion:poi")) do
+            table.insert(targets, {
+                name = poi:getMetadata("name") or poi:getName(),
+                coordinate = poi:getField("coordinate"), visual = poi:getField("visual"), type = "POI",
+            })
+        end
+        local onlineIds = {}
+        for _, onlinePlayer in ipairs(Players.getOnlinePlayers()) do
+            local entity = onlinePlayer:getControlledEntity()
+            if entity then
+                local character = Character.fromSelenePlayer(onlinePlayer)
+                onlineIds[character.id] = true
+                local coordinate = entity:getCoordinate()
+                table.insert(targets, {
+                    name = character.name, type = "Character",
+                    coordinate = { x = coordinate.x, y = coordinate.y, z = coordinate.z },
+                    visual = string.format("illarion:races/race_%d_0", character:getRace()),
+                })
+            end
+        end
+        for _, character in ipairs(CharacterPersistence.loadAllCharacterSummaries()) do
+            if not onlineIds[character.id] then
+                table.insert(targets, {
+                    name = character.name, type = "Character",
+                    coordinate = { x = character.x, y = character.y, z = character.z },
+                    visual = string.format("illarion:races/race_%d_0", character.race),
+                })
+            end
+        end
+        local Entities = require("selene.entities")
+        for _, entity in ipairs(Entities.findAllByTag("illarion:character")) do
+            local data = entity:getRuntimeData(DataKeys.Character)
+            if data[DataFields.CharacterType] == Character.npc then
+                local definition = data[DataFields.NPC]
+                local coordinate = entity:getCoordinate()
+                table.insert(targets, {
+                    name = entity:getName(), type = "NPC",
+                    coordinate = { x = coordinate.x, y = coordinate.y, z = coordinate.z },
+                    visual = definition and definition:getField("entity") or nil,
+                })
+            end
+        end
+        return targets
+    end)
+
     moonlightEditor.registerGizmoProvider(function()
         local gizmos = {}
         for _, spawn in pairs(Registries.findAll("illarion:monster_spawns")) do
