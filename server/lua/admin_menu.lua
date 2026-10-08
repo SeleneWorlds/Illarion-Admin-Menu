@@ -11,6 +11,7 @@ local AdminPersistence = require("illarion-script-loader.server.lua.lib.adminPer
 local MonsterManager = require("illarion-script-loader.server.lua.lib.monsterManager")
 local CharacterManager = require("illarion-script-loader.server.lua.lib.characterManager")
 local TileAnnotationForms = require("illarion-admin-menu.server.lua.annotation_forms")
+local ItemForms = require("illarion-admin-menu.server.lua.item_forms")
 
 local function raceVisual(race)
     local raceId = race:getMetadata("id")
@@ -198,11 +199,57 @@ if moonlightEditorOk then
         return gizmos
     end)
 
+    moonlightEditor.registerGizmoProvider(function(player, coordinate)
+        local camera = player:getCameraEntity() or player:getControlledEntity()
+        local dimension = camera and camera:getDimension()
+        if not dimension then return {} end
+        local gizmos = {}
+        for _, entity in ipairs(dimension:getEntitiesInRange(coordinate, 64)) do
+            local entityCoordinate = entity:getCoordinate()
+            local gizmoCoordinate = { x = entityCoordinate.x, y = entityCoordinate.y, z = entityCoordinate.z }
+            if entity:hasTag("illarion:item") then
+                local definition = entity:getEntityDefinition()
+                local itemId = definition:getMetadata("itemId")
+                local item = itemId and Registries.findByMetadata("illarion:items", "id", itemId)
+                table.insert(gizmos, {
+                    id = "illarion:item:" .. tostring(entity:getNetworkId()),
+                    label = item and (item:getField("name") or item:getName()) or definition:getName(),
+                    coordinate = gizmoCoordinate,
+                    color = "#65b8e8",
+                    lookup = true,
+                    visual = item and item:getField("visual") or nil,
+                })
+            elseif entity:hasTag("illarion:character") then
+                local data = entity:getRuntimeData(DataKeys.Character)
+                if data[DataFields.CharacterType] == Character.npc then
+                    local definition = data[DataFields.NPC]
+                    local raceId = tonumber(data[DataFields.Race])
+                    if not raceId and type(data[DataFields.Race]) == "string" then
+                        local race = Registries.findByName("illarion:races", data[DataFields.Race])
+                        raceId = race and tonumber(race:getMetadata("id"))
+                    end
+                    table.insert(gizmos, {
+                        id = "illarion:npc:" .. tostring(entity:getNetworkId()),
+                        label = entity:getName(),
+                        coordinate = gizmoCoordinate,
+                        path = definition and definition:getSourcePath() or nil,
+                        color = "#88c978",
+                        visual = raceId and string.format("illarion:races/race_%d_%d", raceId,
+                            data[DataFields.Sex] == "female" and 1 or 0) or nil,
+                    })
+                end
+            end
+        end
+        return gizmos
+    end)
+
     moonlightEditor.registerCoordinateLookup(function(coordinate, scope, player)
         local entity = player and (player:getCameraEntity() or player:getControlledEntity())
         local dimension = entity and entity:getDimension()
         if not scope and dimension then
-            local form = TileAnnotationForms.at(dimension, coordinate)
+            local form = ItemForms.at(dimension, coordinate)
+            if form then return form end
+            form = TileAnnotationForms.at(dimension, coordinate)
             if form then return form end
         end
         local function matchesScope(path)
