@@ -147,6 +147,20 @@ end
 
 local moonlightEditorOk, moonlightEditor = pcall(require, "moonlight-editor.server.lua.editor")
 if moonlightEditorOk then
+    moonlightEditor.registerContextMenuAction({
+        id = "illarion-admin-menu:teleport-here",
+        label = "Teleport here",
+        isAvailable = function(player)
+            return getAdminCharacter(player) ~= nil
+        end,
+        execute = function(player, coordinate)
+            local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+            administrator:forceWarp(coordinate)
+            administrator:logAdmin(string.format("Warp %s to Coordinate (%d, %d, %d)",
+                administrator.name, coordinate.x, coordinate.y, coordinate.z))
+        end,
+    })
+
     moonlightEditor.registerRegistryVisualResolver("illarion:races", raceVisual)
     moonlightEditor.registerRegistryVisualResolver("illarion:monsters", monsterVisual)
 
