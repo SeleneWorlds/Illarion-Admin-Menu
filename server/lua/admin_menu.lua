@@ -1,4 +1,5 @@
 local AdminMenu = require("moonlight-admin.server.lua.admin_menu")
+local Permissions = require("selene.permissions")
 local Registries = require("selene.registries")
 local Players = require("selene.players")
 local Dimensions = require("selene.dimensions")
@@ -388,7 +389,7 @@ if moonlightEditorOk then
         description = "Enter or leave the editor.",
         parameters = {},
         isAvailable = function(player)
-            return getAdminCharacter(player) ~= nil
+            return Permissions.has(player, "moonlight-editor.toggle")
         end,
         execute = function(player)
             local enabled = moonlightEditor.toggle(player)
