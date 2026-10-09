@@ -475,6 +475,36 @@ AdminMenu.registerAction({
 })
 
 AdminMenu.registerAction({
+    id = "illarion-admin-menu:kick",
+    label = "Kick",
+    description = "Disconnect an online character with an optional reason.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+        { name = "reason", label = "Reason", type = "message", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local reason = parameters.reason
+        if not reason or not reason:find("%S") then
+            reason = "You have been kicked by an administrator."
+        end
+        administrator:logAdmin(string.format("Kick %s: %s", character.name, reason))
+        character.SelenePlayer:kick(reason)
+        return "Kicked " .. character.name .. "."
+    end,
+})
+
+AdminMenu.registerAction({
     id = "illarion-admin-menu:toggle-clipping",
     label = "Toggle Clipping",
     description = "Toggle whether an online character collides with solid objects.",
