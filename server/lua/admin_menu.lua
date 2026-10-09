@@ -132,6 +132,11 @@ local function changeAdminAccess(player, targetId, grant)
     local administrator = assert(getAdminCharacter(player), "Administrator access required.")
     local target = resolveTarget(targetId)
     local userId = CharacterPersistence.getUserIdForCharacter(target.id)
+    if not grant then
+        local administratorUserId = CharacterPersistence.getUserIdForCharacter(administrator.id)
+        assert(userId ~= administratorUserId, "You cannot revoke your own administrator access.")
+        assert(not AdminPersistence.isSeededAdmin(userId), "You cannot revoke administrator access from a seeded administrator.")
+    end
     local verb = grant and "Grant Admin" or "Revoke Admin"
     administrator:logAdmin(string.format("%s: %s (%s)", verb, target.name, userId))
     local changed
