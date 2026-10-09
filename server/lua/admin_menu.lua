@@ -486,6 +486,40 @@ for _, scope in ipairs({ "Account", "Character" }) do
 end
 
 AdminMenu.registerAction({
+    id = "illarion-admin-menu:spectate-character",
+    label = "Spectate Character",
+    description = "Follow a character with your camera. Execute again to stop.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local target = character.SeleneEntity
+        local camera = player:getCameraEntity()
+        if camera and camera:getNetworkId() == target:getNetworkId() then
+            player:setCameraEntity(player:getControlledEntity())
+            player:setCameraToFollowControlledEntity()
+            administrator:logAdmin("Stop Spectating " .. character.name)
+            return "Stopped spectating " .. character.name .. "."
+        end
+        player:setCameraEntity(target)
+        player:setCameraToFollowTarget()
+        administrator:logAdmin("Spectate " .. character.name)
+        return "Spectating " .. character.name .. "."
+    end,
+})
+
+AdminMenu.registerAction({
     id = "illarion-admin-menu:broadcast-message",
     label = "Broadcast Message",
     description = "Send a message to every online player.",
