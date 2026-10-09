@@ -1297,7 +1297,7 @@ AdminMenu.registerAction({
 AdminMenu.registerAction({
     id = "illarion-admin-menu:set-attribute",
     label = "Set Attribute",
-    description = "Set a character's persisted base attribute.",
+    description = "Set a character's attribute value.",
     parameters = {
         {
             name = "target",
@@ -1320,37 +1320,33 @@ AdminMenu.registerAction({
         )
         local attribute = assert(attributeDefinition:getMetadata("key"), "Attribute has no key.")
         local attributeName = attributeDefinition:getMetadata("name") or attribute
-        local isBaseAttribute = attributeDefinition:getMetadata("base") == true
         local character, offline = resolveTarget(parameters.target)
+        if not parameters.overrideLimits then
+            local raceId = offline and character.race or character:getRace()
+            local race = assert(
+                Registries.findByMetadata("illarion:races", "id", raceId),
+                "Race no longer exists."
+            )
+            local titlecaseAttribute = attribute:gsub("^%l", string.upper, 1)
+            local range = race:getField(attribute)
+            local minValue = range and range.min or race:getField("min" .. titlecaseAttribute)
+            local maxValue = range and range.max or race:getField("max" .. titlecaseAttribute)
+            assert(
+                (minValue == nil or parameters.value >= minValue)
+                    and (maxValue == nil or parameters.value <= maxValue),
+                "Value is invalid for the character's race."
+            )
+        end
         local oldValue, newValue
         if offline then
-            assert(isBaseAttribute, "Only base attributes can be changed for an offline character.")
-            if not parameters.overrideLimits then
-                local race = assert(
-                    Registries.findByMetadata("illarion:races", "id", character.race),
-                    "Race no longer exists."
-                )
-                local titlecaseAttribute = attribute:gsub("^%l", string.upper, 1)
-                local range = race:getField(attribute)
-                local minValue = range and range.min or race:getField("min" .. titlecaseAttribute)
-                local maxValue = range and range.max or race:getField("max" .. titlecaseAttribute)
-                assert(
-                    minValue ~= nil and maxValue ~= nil
-                        and parameters.value >= minValue and parameters.value <= maxValue,
-                    "Value is invalid for the character's race."
-                )
-            end
-            oldValue = CharacterPersistence.updateOfflineCharacterBaseAttribute(character.id, attribute, parameters.value)
-            newValue = parameters.value
+            oldValue, newValue = CharacterPersistence.updateOfflineCharacterAttribute(
+                character.id, attribute, parameters.value
+            )
         else
-            assert(isBaseAttribute, "The selected attribute is not a base attribute.")
-            oldValue = character:getBaseAttribute(attribute)
-            if parameters.overrideLimits then
-                AttributeManager.GetAttribute(character, attribute):setValue(parameters.value)
-            else
-                assert(character:setBaseAttribute(attribute, parameters.value), "Value is invalid for the character's race.")
-            end
-            newValue = character:getBaseAttribute(attribute)
+            local selectedAttribute = AttributeManager.GetAttribute(character, attribute)
+            oldValue = selectedAttribute:getValue()
+            selectedAttribute:setValue(parameters.value)
+            newValue = selectedAttribute:getValue()
         end
         administrator:logAdmin(string.format(
             "Set %s Attribute %s from %g to %g",
