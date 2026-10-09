@@ -9,6 +9,7 @@ local CharacterPersistence = require("illarion-script-loader.server.lua.lib.char
 local AttributeManager = require("illarion-script-loader.server.lua.lib.attributeManager")
 local MagicManager = require("illarion-script-loader.server.lua.lib.magicManager")
 local AdminPersistence = require("illarion-script-loader.server.lua.lib.adminPersistence")
+local BanManager = require("illarion-script-loader.server.lua.lib.banManager")
 local MonsterManager = require("illarion-script-loader.server.lua.lib.monsterManager")
 local CharacterManager = require("illarion-script-loader.server.lua.lib.characterManager")
 local TileAnnotationForms = require("illarion-admin-menu.server.lua.annotation_forms")
@@ -432,6 +433,57 @@ AdminMenu.registerAction({
         return changeAdminAccess(player, parameters.target, false)
     end,
 })
+
+for _, scope in ipairs({ "Account", "Character" }) do
+    for _, banning in ipairs({ true, false }) do
+        local label = (banning and "Ban " or "Unban ") .. scope
+        local parameters = {
+            { name = "target", label = "Target", type = "target", resolver = "illarion:characters" },
+        }
+        if banning then
+            table.insert(parameters, { name = "reason", label = "Reason", type = "message" })
+            table.insert(parameters, {
+                name = "durationDays", label = "Duration in days",
+                type = "number", required = false, min = 0,
+            })
+        end
+        AdminMenu.registerAction({
+            id = "illarion-admin-menu:" .. (banning and "ban-" or "unban-") .. scope:lower(),
+            label = label,
+            description = scope == "Account"
+                and (label .. " for the account that owns the selected character.")
+                or (label .. " for the selected character."),
+            parameters = parameters,
+            isAvailable = function(player)
+                return getAdminCharacter(player) ~= nil
+            end,
+            execute = function(player, values)
+                local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+                local target = resolveTarget(values.target)
+                local id = scope == "Account" and CharacterPersistence.getUserIdForCharacter(target.id) or target.id
+                if banning then
+                    local reason = requireMessage(values.reason)
+                    local expiresAt
+                    if values.durationDays ~= nil then
+                        local days = values.durationDays
+                        assert(type(days) == "number" and days > 0 and days < math.huge,
+                            "Duration must be a positive number of days, or blank for indefinite.")
+                        expiresAt = os.time() + math.ceil(days * 86400)
+                    end
+                    administrator:logAdmin(string.format("%s: %s (%s), reason: %s, expires: %s",
+                        label, target.name, tostring(id), reason, expiresAt and tostring(expiresAt) or "indefinite"))
+                    BanManager["ban" .. scope](id, reason, expiresAt)
+                    return scope == "Account" and ("Banned " .. target.name .. "'s account.")
+                        or ("Banned character " .. target.name .. ".")
+                end
+                administrator:logAdmin(string.format("%s: %s (%s)", label, target.name, tostring(id)))
+                local changed = BanManager["unban" .. scope](id)
+                return changed and ("Removed " .. scope:lower() .. " ban for " .. target.name .. ".")
+                    or ("No " .. scope:lower() .. " ban for " .. target.name .. ".")
+            end,
+        })
+    end
+end
 
 AdminMenu.registerAction({
     id = "illarion-admin-menu:broadcast-message",
