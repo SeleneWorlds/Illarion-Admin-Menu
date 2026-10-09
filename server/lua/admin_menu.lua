@@ -1318,8 +1318,8 @@ AdminMenu.registerAction({
             Registries.findByName("illarion:attributes", parameters.attribute),
             "Attribute no longer exists."
         )
-        local attribute = assert(attributeDefinition:getMetadata("key"), "Attribute has no key.")
-        local attributeName = attributeDefinition:getMetadata("name") or attribute
+        local attribute = assert(attributeDefinition:getField("id"), "Attribute has no ID.")
+        local attributeName = attributeDefinition:getField("name") or attribute
         local character, offline = resolveTarget(parameters.target)
         if not parameters.overrideLimits then
             local raceId = offline and character.race or character:getRace()
@@ -1383,8 +1383,8 @@ AdminMenu.registerAction({
             Registries.findByName("illarion:attributes", parameters.attribute),
             "Attribute no longer exists."
         )
-        local attribute = assert(attributeDefinition:getMetadata("key"), "Attribute has no key.")
-        local attributeName = attributeDefinition:getMetadata("name") or attribute
+        local attribute = assert(attributeDefinition:getField("id"), "Attribute has no ID.")
+        local attributeName = attributeDefinition:getField("name") or attribute
         local character = resolveOnlineTarget(parameters.target)
         local oldValue = attribute == "poisonvalue" and character:getPoisonValue()
             or character:increaseAttrib(attribute, 0)
