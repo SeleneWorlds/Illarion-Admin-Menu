@@ -845,6 +845,40 @@ AdminMenu.registerAction({
 })
 
 AdminMenu.registerAction({
+    id = "illarion-admin-menu:toggle-freeze",
+    label = "Toggle Freeze",
+    description = "Freeze or unfreeze an online character's movement.",
+    parameters = {
+        {
+            name = "target",
+            label = "Target",
+            type = "target",
+            resolver = "illarion:characters",
+            requireOnline = true,
+        },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character = resolveOnlineTarget(parameters.target)
+        local entity = character.SeleneEntity
+        local data = entity:getRuntimeData(DataKeys.Character)
+        local frozen = not data[DataFields.Frozen]
+        data[DataFields.Frozen] = frozen
+        if not frozen then
+            AttributeManager.GetAttribute(character, "actionpoints"):setValue(21)
+        end
+        for _, controllingPlayer in ipairs(entity:getControllingPlayers()) do
+            controllingPlayer:setCanMove(not frozen)
+        end
+        administrator:logAdmin((frozen and "Freeze " or "Unfreeze ") .. character.name)
+        return (frozen and "Frozen " or "Unfrozen ") .. character.name .. "."
+    end,
+})
+
+AdminMenu.registerAction({
     id = "illarion-admin-menu:kill",
     label = "Kill",
     description = "Kill an online character.",
