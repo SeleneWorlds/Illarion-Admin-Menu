@@ -1523,7 +1523,7 @@ if baseTreasureOk then
     AdminMenu.registerAction({
         id = "illarion-admin-menu:create-treasure-map",
         label = "Create Treasure Map",
-        description = "Create a treasure map for an online character.",
+        description = "Create a treasure map for an online character. Leave Level empty for a random treasure level.",
         parameters = {
             {
                 name = "target",
@@ -1532,6 +1532,13 @@ if baseTreasureOk then
                 resolver = "illarion:characters",
                 requireOnline = true,
             },
+            {
+                name = "level",
+                label = "Level",
+                type = "registry",
+                registry = "illarion:treasure_levels",
+                required = false,
+            },
         },
         isAvailable = function(player)
             return getAdminCharacter(player) ~= nil
@@ -1539,9 +1546,20 @@ if baseTreasureOk then
         execute = function(player, parameters)
             local administrator = assert(getAdminCharacter(player), "Administrator access required.")
             local character = resolveOnlineTarget(parameters.target)
-            assert(baseTreasure.createMap(character), "No suitable treasure location could be found.")
-            administrator:logAdmin("Create Treasure Map for " .. character.name)
-            return "Created a treasure map for " .. character.name .. "."
+            local level
+            local levelDescription = "random level"
+            if parameters.level ~= nil then
+                local definition = assert(
+                    Registries.findByName("illarion:treasure_levels", parameters.level),
+                    "Treasure level no longer exists."
+                )
+                level = assert(tonumber(definition:getMetadata("id")), "Treasure level has no numeric ID.")
+                assert(level % 1 == 0 and level >= 1 and level <= 9, "Level must be an integer between 1 and 9.")
+                levelDescription = definition:getMetadata("name") or "level " .. level
+            end
+            assert(baseTreasure.createMap(character, level), "No suitable treasure location could be found.")
+            administrator:logAdmin("Create Treasure Map (" .. levelDescription .. ") for " .. character.name)
+            return "Created a treasure map (" .. levelDescription .. ") for " .. character.name .. "."
         end,
     })
 end
