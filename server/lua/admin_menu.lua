@@ -462,6 +462,11 @@ for _, scope in ipairs({ "Account", "Character" }) do
                 local target = resolveTarget(values.target)
                 local id = scope == "Account" and CharacterPersistence.getUserIdForCharacter(target.id) or target.id
                 if banning then
+                    local userId = CharacterPersistence.getUserIdForCharacter(target.id)
+                    local administratorUserId = CharacterPersistence.getUserIdForCharacter(administrator.id)
+                    assert(userId ~= administratorUserId, "You cannot ban your own account or characters.")
+                    assert(not AdminPersistence.isSeededAdmin(userId),
+                        "You cannot ban a seeded administrator's account or characters.")
                     local reason = requireMessage(values.reason)
                     local expiresAt
                     if values.durationDays ~= nil then
