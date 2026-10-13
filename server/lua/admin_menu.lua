@@ -240,6 +240,7 @@ if moonlightEditorOk then
                 path = spawn:getSourcePath(),
                 color = "#e05252",
                 visual = monsterSpawnVisual(spawn),
+                range = spawn:getField("range"),
             })
         end
         return gizmos
