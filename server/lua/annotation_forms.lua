@@ -62,7 +62,9 @@ local function definition(kind, data, legacy)
     if kind == "warp" then
         return { destination = "coordinate" }, { destination = { x = data.x, y = data.y, z = data.z } }
     elseif kind == "triggerfield" then
-        return { script = "script" }, copy(data)
+        local values = copy(data)
+        values.script = nil
+        return { triggerfield = { type = "registry", registry = "illarion:triggerfields" } }, values
     elseif kind == "door" then
         return {
             lockId = { type = "string", optional = true },
@@ -114,7 +116,13 @@ local function updated(kind, values, original, legacy)
         for key in pairs(values.data) do assert(type(key) == "string", "Annotation JSON must be an object.") end
         return values.data
     elseif kind == "triggerfield" then
-        assert(type(values.script) == "string" and values.script ~= "", "A trigger field requires a script.")
+        assert(type(values.triggerfield) == "string" and values.triggerfield ~= "",
+            "A trigger field requires a triggerfield registry entry.")
+        assert(Registries.findByName("illarion:triggerfields", values.triggerfield),
+            "Triggerfield registry entry does not exist.")
+        local result = copy(values)
+        result.script = nil
+        return result
     elseif kind == "door" then
         assert(values.lockId == nil or type(values.lockId) == "string", "Lock ID must be a string.")
         assert(values.doorLock == nil or values.doorLock == "locked" or values.doorLock == "unlocked",
