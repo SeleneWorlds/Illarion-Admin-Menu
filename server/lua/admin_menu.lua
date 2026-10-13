@@ -11,6 +11,7 @@ local MagicManager = require("illarion-script-loader.server.lua.lib.magicManager
 local AdminPersistence = require("illarion-script-loader.server.lua.lib.adminPersistence")
 local BanManager = require("illarion-script-loader.server.lua.lib.banManager")
 local MonsterManager = require("illarion-script-loader.server.lua.lib.monsterManager")
+local CharacterVisual = require("illarion-script-loader.server.lua.lib.characterVisual")
 local CharacterManager = require("illarion-script-loader.server.lua.lib.characterManager")
 local TileAnnotationForms = require("illarion-admin-menu.server.lua.annotation_forms")
 local ItemForms = require("illarion-admin-menu.server.lua.item_forms")
@@ -216,12 +217,11 @@ if moonlightEditorOk then
         for _, entity in ipairs(Entities.findAllByTag("illarion:character")) do
             local data = entity:getRuntimeData(DataKeys.Character)
             if data[DataFields.CharacterType] == Character.npc then
-                local definition = data[DataFields.NPC]
                 local coordinate = entity:getCoordinate()
                 table.insert(targets, {
                     name = entity:getName(), type = "NPC",
                     coordinate = { x = coordinate.x, y = coordinate.y, z = coordinate.z },
-                    visual = definition and definition:getField("entity") or nil,
+                    visual = CharacterVisual.findRaceEntity(data[DataFields.Race], data[DataFields.Sex]):getName(),
                 })
             end
         end
@@ -295,8 +295,7 @@ if moonlightEditorOk then
             elseif entity:hasTag("illarion:character") then
                 local data = entity:getRuntimeData(DataKeys.Character)
                 if data[DataFields.CharacterType] == Character.npc then
-                    local definition = data[DataFields.NPC]
-                    local raceId = tonumber(data[DataFields.Race])
+                        local raceId = tonumber(data[DataFields.Race])
                     if not raceId and type(data[DataFields.Race]) == "string" then
                         local race = Registries.findByName("illarion:races", data[DataFields.Race])
                         raceId = race and tonumber(race:getMetadata("id"))
