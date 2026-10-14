@@ -295,7 +295,8 @@ if moonlightEditorOk then
             elseif entity:hasTag("illarion:character") then
                 local data = entity:getRuntimeData(DataKeys.Character)
                 if data[DataFields.CharacterType] == Character.npc then
-                        local raceId = tonumber(data[DataFields.Race])
+                    local definition = entity:getEntityDefinition()
+                    local raceId = tonumber(data[DataFields.Race])
                     if not raceId and type(data[DataFields.Race]) == "string" then
                         local race = Registries.findByName("illarion:races", data[DataFields.Race])
                         raceId = race and tonumber(race:getMetadata("id"))
