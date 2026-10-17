@@ -679,6 +679,66 @@ AdminMenu.registerAction({
     end,
 })
 
+local function openPortal(administrator, coordinate, name)
+    local destination = position(
+        assert(tonumber(coordinate.x), "Destination has no X coordinate."),
+        assert(tonumber(coordinate.y), "Destination has no Y coordinate."),
+        assert(tonumber(coordinate.z), "Destination has no Z coordinate.")
+    )
+    local source = getPositionInFront(administrator)
+    assert(not world:isCharacterOnField(source), "A character is standing in front of you.")
+    assert(not world:isItemOnField(source), "An item is blocking the portal position.")
+    if type(name) ~= "string" or not name:find("%S") then
+        name = string.format("%d, %d, %d", destination.x, destination.y, destination.z)
+    end
+    world:createItemFromId(10, 1, source, true, 933, {
+        x = destination.x, y = destination.y, z = destination.z,
+        CustomName = name,
+    })
+    world:gfx(41, source)
+    world:makeSound(4, source)
+    administrator:logAdmin(string.format(
+        "Open Portal at (%d, %d, %d) to %s (%d, %d, %d)",
+        source.x, source.y, source.z, name, destination.x, destination.y, destination.z
+    ))
+    return "Opened portal to " .. name .. "."
+end
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:open-portal-to-coordinate",
+    label = "Open Portal to Coordinate",
+    description = "Open a portal in front of you to a world coordinate.",
+    parameters = {
+        { name = "coordinate", label = "Destination", type = "coordinate" },
+        { name = "name", label = "Portal Name", type = "string", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        return openPortal(administrator, parameters.coordinate, parameters.name)
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:open-portal-to-location",
+    label = "Open Portal to Location",
+    description = "Open a portal in front of you to a point of interest.",
+    parameters = {
+        { name = "location", label = "Location", type = "registry", registry = "illarion:poi" },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local location = assert(Registries.findByName("illarion:poi", parameters.location), "Location no longer exists.")
+        local coordinate = assert(location:getField("coordinate"), "Location has no coordinate.")
+        return openPortal(administrator, coordinate, location:getMetadata("name") or parameters.location)
+    end,
+})
+
 AdminMenu.registerAction({
     id = "illarion-admin-menu:teleport-to-coordinate",
     label = "Teleport to Coordinate",
