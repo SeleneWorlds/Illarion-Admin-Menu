@@ -1,11 +1,24 @@
 local Registries = require("selene.registries")
 local Config = require("selene.config")
+local ItemForms = require("illarion-admin-menu.server.lua.item_forms")
 local Forms = {}
 
 local function copy(value)
     local result = {}
     for key, field in pairs(value) do result[key] = field end
     return result
+end
+
+local function annotationItem(key, tiles)
+    for _, tile in ipairs(tiles) do
+        if tile:getName() == key then
+            local itemId = tonumber(tile:getMetadata("itemId"))
+            if itemId then return Registries.findByMetadata("illarion:items", "id", itemId) end
+        end
+    end
+    -- Tile names include the items/ prefix; item registry names do not.
+    local itemName = key:match("^illarion:items/(item_%d+)$")
+    return itemName and Registries.findByName("illarion:items", "illarion:" .. itemName)
 end
 
 local function classify(key, data, tiles)
@@ -22,6 +35,7 @@ local function classify(key, data, tiles)
             if type(script) == "string" and script:match("doors$") then return "door" end
         end
     end
+    if annotationItem(key, tiles) then return "item" end
     return "raw"
 end
 
@@ -42,7 +56,7 @@ local function storedNumber(value, original)
     return type(original) == "number" and value or tostring(value)
 end
 
-local function definition(kind, data, legacy)
+local function definition(kind, data, legacy, key, tiles)
     if legacy then
         local values = copy(data)
         values.data = nil
@@ -59,7 +73,18 @@ local function definition(kind, data, legacy)
             } },
         }, values
     end
-    if kind == "warp" then
+    if kind == "item" then
+        local schema = ItemForms.schema()
+        schema.count.max = 1
+        local itemData = copy(data)
+        itemData.quality, itemData.wear = nil, nil
+        return schema, {
+            item = annotationItem(key, tiles):getName(), count = 1,
+            quality = tonumber(data.quality) or 333,
+            wear = tonumber(data.wear) or 0,
+            data = itemData,
+        }
+    elseif kind == "warp" then
         return { destination = "coordinate" }, { destination = { x = data.x, y = data.y, z = data.z } }
     elseif kind == "triggerfield" then
         local values = copy(data)
@@ -100,7 +125,20 @@ local function updated(kind, values, original, legacy)
         end
         return result
     end
-    if kind == "warp" then
+    if kind == "item" then
+        assert(type(values.item) == "string" and values.item ~= "", "An item is required.")
+        assert(Registries.findByName("illarion:items", values.item), "Unknown item: " .. values.item)
+        assert(values.count == 1, "Tile items must have a count of one.")
+        for _, field in ipairs({ "quality", "wear" }) do
+            numericValue(values[field], field .. " must be a non-negative 32-bit integer.")
+        end
+        assert(type(values.data) == "table", "Item data must be an object.")
+        for key in pairs(values.data) do assert(type(key) == "string", "Item data must be an object.") end
+        -- Tile item data is stored flat; quality and wear are reserved runtime fields.
+        local result = copy(values.data)
+        result.quality, result.wear = values.quality, values.wear
+        return result
+    elseif kind == "warp" then
         local destination = values.destination
         assert(type(destination) == "table", "Destination must be a coordinate.")
         for _, axis in ipairs({ "x", "y", "z" }) do
@@ -145,11 +183,11 @@ function Forms.at(dimension, coordinate)
     table.sort(keys)
     local tiles = dimension:getTilesAt(coordinate)
     local schema, values, labels, entries = {}, {}, {}, {}
-    local titles = { warp = "Warp destination", door = "Door", depot = "Depot", triggerfield = "Trigger field", raw = "Raw JSON" }
+    local titles = { item = "Item", warp = "Warp destination", door = "Door", depot = "Depot", triggerfield = "Trigger field", raw = "Raw JSON" }
     for index, key in ipairs(keys) do
         local kind = classify(key, annotations[key], tiles)
         local legacy = isLegacy(kind, annotations[key])
-        local entrySchema, entryValues = definition(kind, annotations[key], legacy)
+        local entrySchema, entryValues = definition(kind, annotations[key], legacy, key, tiles)
         local field = "annotation" .. index
         entries[index] = { key = key, kind = kind, field = field, legacy = legacy }
         if #keys == 1 then
@@ -165,14 +203,41 @@ function Forms.at(dimension, coordinate)
         schema = schema, values = values, fieldLabels = labels,
         update = function(newValues)
             local updates = {}
+            local replacements, targetKeys = {}, {}
             -- Validate every annotation before changing the map.
             for _, entry in ipairs(entries) do
                 local current = dimension:getAnnotationAt(coordinate, entry.key)
                 assert(current, "Annotation no longer exists: " .. entry.key)
                 updates[entry.key] = updated(entry.kind, #keys == 1 and newValues or newValues[entry.field], current, entry.legacy)
+                if entry.kind == "item" then
+                    local value = #keys == 1 and newValues or newValues[entry.field]
+                    local currentItem = annotationItem(entry.key, dimension:getTilesAt(coordinate))
+                    if not currentItem or value.item ~= currentItem:getName() then
+                        local item = Registries.findByName("illarion:items", value.item)
+                        local replacement = assert(Registries.findByMetadata("tiles", "itemId", item:getMetadata("id")),
+                            "No item tile exists for: " .. value.item)
+                        local original
+                        for _, tile in ipairs(dimension:getTilesAt(coordinate)) do
+                            if tile:getName() == entry.key then original = tile:getDefinition() end
+                            assert(tile:getName() ~= replacement:getName(), "Target item tile already exists.")
+                        end
+                        assert(original, "Item tile no longer exists: " .. entry.key)
+                        assert(not dimension:getAnnotationAt(coordinate, replacement:getName())
+                            and not targetKeys[replacement:getName()], "Target item annotation already exists.")
+                        targetKeys[replacement:getName()] = true
+                        replacements[entry.key] = { original = original, definition = replacement }
+                    end
+                end
             end
             for _, entry in ipairs(entries) do
-                dimension:annotateTile(coordinate, entry.key, updates[entry.key])
+                local key = entry.key
+                local replacement = replacements[key]
+                if replacement then
+                    dimension:getMap():swapTile(coordinate, replacement.original, replacement.definition)
+                    dimension:annotateTile(coordinate, key, nil)
+                    entry.key = replacement.definition:getName()
+                end
+                dimension:annotateTile(coordinate, entry.key, updates[key])
             end
         end,
     }

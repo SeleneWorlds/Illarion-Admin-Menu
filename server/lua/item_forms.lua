@@ -4,6 +4,23 @@ local Registries = require("selene.registries")
 local ItemEntity = require("illarion-script-loader.server.lua.lib.itemEntity")
 local Forms = {}
 
+function Forms.schema()
+    return {
+        item = { type = "registry", registry = "illarion:items" },
+        count = { type = "integer", min = 1 },
+        quality = { type = "integer", editor = "slider", min = 0, max = 999 },
+        wear = { type = "integer", editor = "slider", min = 0, max = 255 },
+        data = {
+            type = "object",
+            properties = {
+                CustomName = { type = "string", optional = true },
+                CustomNameDe = { type = "string", optional = true },
+            },
+            additionalProperties = "any",
+        },
+    }
+end
+
 local function copy(value)
     if type(value) == "userdata" then value = value:toTable() end
     local result = {}
@@ -19,13 +36,7 @@ function Forms.at(dimension, coordinate)
             local field = "item" .. (#entries + 1)
             local title = entity:getEntityDefinition():getName()
             local item = Registries.findByMetadata("illarion:items", "id", entity:getEntityDefinition():getMetadata("itemId"))
-            local entrySchema = {
-                item = { type = "registry", registry = "illarion:items" },
-                count = { type = "integer", min = 1 },
-                quality = { type = "integer", min = 0 },
-                wear = { type = "integer", min = 0 },
-                data = "any",
-            }
+            local entrySchema = Forms.schema()
             local entryValues = {
                 item = item and item:getName() or "",
                 count = tonumber(data[DataFields.Count]) or 1,
