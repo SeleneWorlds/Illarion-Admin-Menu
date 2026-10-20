@@ -1675,6 +1675,41 @@ AdminMenu.registerAction({
 })
 
 AdminMenu.registerAction({
+    id = "illarion-admin-menu:place-item",
+    label = "Place Item",
+    description = "Place an item in front of you, or at an optional world coordinate.",
+    parameters = {
+        { name = "item", label = "Item", type = "registry", registry = "illarion:items", deferred = true },
+        { name = "quantity", label = "Quantity", type = "number", default = 1, min = 1, step = 1 },
+        { name = "quality", label = "Quality", type = "number", default = 333, min = 0, step = 1 },
+        { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
+    },
+    isAvailable = function(player)
+        return getAdminCharacter(player) ~= nil
+    end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        assert(parameters.quantity % 1 == 0, "Quantity must be an integer.")
+        assert(parameters.quality % 1 == 0, "Quality must be an integer.")
+        local item = assert(Registries.findByName("illarion:items", parameters.item), "Item no longer exists.")
+        local itemId = assert(item:getMetadata("id"), "Item has no Illarion ID.")
+        local itemName = item:getField("name")
+        if itemName == nil or itemName == "" then
+            itemName = parameters.item
+        end
+        local target = resolveCoordinate(administrator, parameters.coordinate)
+        assert(world:createItemFromId(itemId, parameters.quantity, target, true, parameters.quality, {}),
+            "Item could not be placed.")
+        administrator:logAdmin(string.format(
+            "Place Item %d x %s (%d), Quality %d at Coordinate (%d, %d, %d)",
+            parameters.quantity, itemName, itemId, parameters.quality, target.x, target.y, target.z
+        ))
+        return string.format("Placed %d x %s at %d, %d, %d.",
+            parameters.quantity, itemName, target.x, target.y, target.z)
+    end,
+})
+
+AdminMenu.registerAction({
     id = "illarion-admin-menu:spawn-monster",
     label = "Spawn Monster",
     description = "Spawn a monster at a world coordinate.",
