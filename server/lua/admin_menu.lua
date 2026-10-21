@@ -100,6 +100,67 @@ local function getAdminCharacter(player)
     return character:isAdmin() and character or nil
 end
 
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:export-character",
+    label = "Export Character",
+    description = "Download the full character JSON record, including all saved collections.",
+    parameters = {
+        { name = "target", label = "Character", type = "target", resolver = "illarion:characters" },
+    },
+    isAvailable = function(player) return getAdminCharacter(player) ~= nil end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        local character, offline = resolveTarget(parameters.target)
+        if not offline then
+            for _, owner in ipairs(Players.getOnlinePlayers()) do
+                if owner:getControlledEntity() and Character.fromSelenePlayer(owner).id == character.id then
+                    CharacterPersistence.saveCharacter(owner, character)
+                    break
+                end
+            end
+        end
+        local record = CharacterPersistence.exportCharacterRecord(character.id)
+        administrator:logAdmin(string.format("Export Character %s (%d)", character.name, character.id))
+        return {
+            message = "Exported " .. character.name .. ".",
+            download = { name = "character-" .. character.id .. ".json", content = require("selene.json").encode(record) },
+        }
+    end,
+})
+
+AdminMenu.registerAction({
+    id = "illarion-admin-menu:import-character",
+    label = "Import Character",
+    description = "Apply exported JSON to an online or offline character, preserving the target ID, name, account, position, and facing.",
+    parameters = {
+        { name = "record", label = "Character JSON", type = "file" },
+        { name = "target", label = "Character", type = "target", resolver = "illarion:characters" },
+    },
+    isAvailable = function(player) return getAdminCharacter(player) ~= nil end,
+    execute = function(player, parameters)
+        local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        assert(#parameters.record <= 4 * 1024 * 1024, "Character JSON must be at most 4 MiB.")
+        local record = require("selene.json").decode(parameters.record)
+        assert(type(record) == "table", "Character JSON must be an object.")
+        local target = resolveTarget(parameters.target)
+        local owner
+        for _, onlinePlayer in ipairs(Players.getOnlinePlayers()) do
+            if onlinePlayer:getControlledEntity() and Character.fromSelenePlayer(onlinePlayer).id == target.id then
+                owner = onlinePlayer
+                break
+            end
+        end
+        -- Preserve the current live location rather than the last autosaved location.
+        if owner then CharacterPersistence.saveCharacter(owner, target) end
+        CharacterPersistence.importCharacterRecord(target.id, record, owner and function()
+            require("illarion-script-loader.server.lua.lib.playerManager").ReloadCharacter(owner, target.id)
+        end or nil)
+        administrator = assert(getAdminCharacter(player), "Administrator access required.")
+        administrator:logAdmin(string.format("Import Character %s (%d)", target.name, target.id))
+        return "Imported character data into " .. target.name .. "."
+    end,
+})
+
 local function getPositionInFront(character)
     local offsets = {
         [Character.north] = { x = 0, y = -1 },
