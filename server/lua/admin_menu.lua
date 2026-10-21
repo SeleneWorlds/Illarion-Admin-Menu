@@ -103,7 +103,7 @@ end
 AdminMenu.registerAction({
     id = "illarion-admin-menu:export-character",
     label = "Export Character",
-    description = "Download the full character JSON record, including all saved collections.",
+    description = "Download a snapshot of the character.",
     parameters = {
         { name = "target", label = "Character", type = "target", resolver = "illarion:characters" },
     },
@@ -131,7 +131,7 @@ AdminMenu.registerAction({
 AdminMenu.registerAction({
     id = "illarion-admin-menu:import-character",
     label = "Import Character",
-    description = "Apply exported JSON to an online or offline character, preserving the target ID, name, account, position, and facing.",
+    description = "Apply an exported snapshot to a character. Preserves their original name and position.",
     parameters = {
         { name = "record", label = "Character JSON", type = "file" },
         { name = "target", label = "Character", type = "target", resolver = "illarion:characters" },
@@ -1702,6 +1702,7 @@ AdminMenu.registerAction({
         { name = "quantity", label = "Quantity", type = "number", default = 1, min = 1, step = 1 },
         { name = "quality", label = "Quality", type = "number", editor = "slider", default = 3, min = 0, max = 9, step = 1 },
         { name = "durability", label = "Durability", type = "number", editor = "slider", default = 99, min = 0, max = 99, step = 1 },
+        { name = "wear", label = "Wear", type = "number", editor = "slider", default = 254, min = 0, max = 255, step = 1 },
     },
     isAvailable = function(player)
         return getAdminCharacter(player) ~= nil
@@ -1715,22 +1716,25 @@ AdminMenu.registerAction({
             "Durability must be an integer between 0 and 99.")
         local character, offline = resolveTarget(parameters.target)
         assert(not offline, "Target character is no longer online.")
+        assert(parameters.wear % 1 == 0 and parameters.wear >= 0 and parameters.wear <= 255,
+            "Wear must be an integer between 0 and 255.")
         local item = assert(Registries.findByName("illarion:items", parameters.item), "Item no longer exists.")
         local itemId = assert(item:getMetadata("id"), "Item has no Illarion ID.")
         local itemName = item:getField("name")
         if itemName == nil or itemName == "" then
             itemName = parameters.item
         end
-        local rest = character:createItem(itemId, parameters.quantity, parameters.quality, {}, parameters.durability)
+        local rest = character:createItem(itemId, parameters.quantity, parameters.quality, {}, parameters.durability, parameters.wear)
         local given = parameters.quantity - rest
         administrator:logAdmin(string.format(
-            "Give %s %d x %s (%d), Quality %d, Durability %d%s",
+            "Give %s %d x %s (%d), Quality %d, Durability %d, Wear %d%s",
             character.name,
             given,
             itemName,
             itemId,
             parameters.quality,
             parameters.durability,
+            parameters.wear,
             rest > 0 and string.format(" (%d did not fit)", rest) or ""
         ))
         if rest > 0 then
@@ -1749,6 +1753,7 @@ AdminMenu.registerAction({
         { name = "quantity", label = "Quantity", type = "number", default = 1, min = 1, step = 1 },
         { name = "quality", label = "Quality", type = "number", editor = "slider", default = 3, min = 0, max = 9, step = 1 },
         { name = "durability", label = "Durability", type = "number", editor = "slider", default = 99, min = 0, max = 99, step = 1 },
+        { name = "wear", label = "Wear", type = "number", editor = "slider", default = 255, min = 0, max = 255, step = 1 },
         { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
     },
     isAvailable = function(player)
@@ -1761,6 +1766,8 @@ AdminMenu.registerAction({
             "Quality must be an integer between 0 and 9.")
         assert(parameters.durability % 1 == 0 and parameters.durability >= 0 and parameters.durability <= 99,
             "Durability must be an integer between 0 and 99.")
+        assert(parameters.wear % 1 == 0 and parameters.wear >= 0 and parameters.wear <= 255,
+            "Wear must be an integer between 0 and 255.")
         local item = assert(Registries.findByName("illarion:items", parameters.item), "Item no longer exists.")
         local itemId = assert(item:getMetadata("id"), "Item has no Illarion ID.")
         local itemName = item:getField("name")
@@ -1768,11 +1775,11 @@ AdminMenu.registerAction({
             itemName = parameters.item
         end
         local target = resolveCoordinate(administrator, parameters.coordinate)
-        assert(world:createItemFromId(itemId, parameters.quantity, target, true, parameters.quality, {}, parameters.durability),
+        assert(world:createItemFromId(itemId, parameters.quantity, target, true, parameters.quality, {}, parameters.durability, parameters.wear),
             "Item could not be placed.")
         administrator:logAdmin(string.format(
-            "Place Item %d x %s (%d), Quality %d, Durability %d at Coordinate (%d, %d, %d)",
-            parameters.quantity, itemName, itemId, parameters.quality, parameters.durability, target.x, target.y, target.z
+            "Place Item %d x %s (%d), Quality %d, Durability %d, Wear %d at Coordinate (%d, %d, %d)",
+            parameters.quantity, itemName, itemId, parameters.quality, parameters.durability, parameters.wear, target.x, target.y, target.z
         ))
         return string.format("Placed %d x %s at %d, %d, %d.",
             parameters.quantity, itemName, target.x, target.y, target.z)
