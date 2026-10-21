@@ -1197,8 +1197,8 @@ AdminMenu.registerAction({
         local target = resolveCoordinate(administrator, parameters.coordinate)
         local item = world:getItemOnField(target)
         assert(item.id ~= 0, "There is no lock at that coordinate.")
-        local locked = item.quality == 233
-        item.quality = locked and 333 or 233
+        local locked = item.quality == 2
+        item.quality = locked and 3 or 2
         if locked and item.data == 0 then
             item.data = math.random(1, 999999999)
         end
@@ -1700,7 +1700,8 @@ AdminMenu.registerAction({
         },
         { name = "item", label = "Item", type = "registry", registry = "illarion:items", deferred = true },
         { name = "quantity", label = "Quantity", type = "number", default = 1, min = 1, step = 1 },
-        { name = "quality", label = "Quality", type = "number", default = 333, min = 0, step = 1 },
+        { name = "quality", label = "Quality", type = "number", editor = "slider", default = 3, min = 0, max = 9, step = 1 },
+        { name = "durability", label = "Durability", type = "number", editor = "slider", default = 99, min = 0, max = 99, step = 1 },
     },
     isAvailable = function(player)
         return getAdminCharacter(player) ~= nil
@@ -1708,7 +1709,10 @@ AdminMenu.registerAction({
     execute = function(player, parameters)
         local administrator = assert(getAdminCharacter(player), "Administrator access required.")
         assert(parameters.quantity % 1 == 0, "Quantity must be an integer.")
-        assert(parameters.quality % 1 == 0, "Quality must be an integer.")
+        assert(parameters.quality % 1 == 0 and parameters.quality >= 0 and parameters.quality <= 9,
+            "Quality must be an integer between 0 and 9.")
+        assert(parameters.durability % 1 == 0 and parameters.durability >= 0 and parameters.durability <= 99,
+            "Durability must be an integer between 0 and 99.")
         local character, offline = resolveTarget(parameters.target)
         assert(not offline, "Target character is no longer online.")
         local item = assert(Registries.findByName("illarion:items", parameters.item), "Item no longer exists.")
@@ -1717,15 +1721,16 @@ AdminMenu.registerAction({
         if itemName == nil or itemName == "" then
             itemName = parameters.item
         end
-        local rest = character:createItem(itemId, parameters.quantity, parameters.quality, {})
+        local rest = character:createItem(itemId, parameters.quantity, parameters.quality, {}, parameters.durability)
         local given = parameters.quantity - rest
         administrator:logAdmin(string.format(
-            "Give %s %d x %s (%d), Quality %d%s",
+            "Give %s %d x %s (%d), Quality %d, Durability %d%s",
             character.name,
             given,
             itemName,
             itemId,
             parameters.quality,
+            parameters.durability,
             rest > 0 and string.format(" (%d did not fit)", rest) or ""
         ))
         if rest > 0 then
@@ -1742,7 +1747,8 @@ AdminMenu.registerAction({
     parameters = {
         { name = "item", label = "Item", type = "registry", registry = "illarion:items", deferred = true },
         { name = "quantity", label = "Quantity", type = "number", default = 1, min = 1, step = 1 },
-        { name = "quality", label = "Quality", type = "number", default = 333, min = 0, step = 1 },
+        { name = "quality", label = "Quality", type = "number", editor = "slider", default = 3, min = 0, max = 9, step = 1 },
+        { name = "durability", label = "Durability", type = "number", editor = "slider", default = 99, min = 0, max = 99, step = 1 },
         { name = "coordinate", label = "Coordinate", type = "coordinate", required = false },
     },
     isAvailable = function(player)
@@ -1751,7 +1757,10 @@ AdminMenu.registerAction({
     execute = function(player, parameters)
         local administrator = assert(getAdminCharacter(player), "Administrator access required.")
         assert(parameters.quantity % 1 == 0, "Quantity must be an integer.")
-        assert(parameters.quality % 1 == 0, "Quality must be an integer.")
+        assert(parameters.quality % 1 == 0 and parameters.quality >= 0 and parameters.quality <= 9,
+            "Quality must be an integer between 0 and 9.")
+        assert(parameters.durability % 1 == 0 and parameters.durability >= 0 and parameters.durability <= 99,
+            "Durability must be an integer between 0 and 99.")
         local item = assert(Registries.findByName("illarion:items", parameters.item), "Item no longer exists.")
         local itemId = assert(item:getMetadata("id"), "Item has no Illarion ID.")
         local itemName = item:getField("name")
@@ -1759,11 +1768,11 @@ AdminMenu.registerAction({
             itemName = parameters.item
         end
         local target = resolveCoordinate(administrator, parameters.coordinate)
-        assert(world:createItemFromId(itemId, parameters.quantity, target, true, parameters.quality, {}),
+        assert(world:createItemFromId(itemId, parameters.quantity, target, true, parameters.quality, {}, parameters.durability),
             "Item could not be placed.")
         administrator:logAdmin(string.format(
-            "Place Item %d x %s (%d), Quality %d at Coordinate (%d, %d, %d)",
-            parameters.quantity, itemName, itemId, parameters.quality, target.x, target.y, target.z
+            "Place Item %d x %s (%d), Quality %d, Durability %d at Coordinate (%d, %d, %d)",
+            parameters.quantity, itemName, itemId, parameters.quality, parameters.durability, target.x, target.y, target.z
         ))
         return string.format("Placed %d x %s at %d, %d, %d.",
             parameters.quantity, itemName, target.x, target.y, target.z)

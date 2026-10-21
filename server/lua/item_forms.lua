@@ -8,7 +8,8 @@ function Forms.schema()
     return {
         item = { type = "registry", registry = "illarion:items" },
         count = { type = "integer", min = 1 },
-        quality = { type = "integer", editor = "slider", min = 0, max = 999 },
+        quality = { type = "integer", editor = "slider", min = 0, max = 9 },
+        durability = { type = "integer", editor = "slider", min = 0, max = 99 },
         wear = { type = "integer", editor = "slider", min = 0, max = 255 },
         data = {
             type = "object",
@@ -40,7 +41,8 @@ function Forms.at(dimension, coordinate)
             local entryValues = {
                 item = item and item:getName() or "",
                 count = tonumber(data[DataFields.Count]) or 1,
-                quality = tonumber(data[DataFields.Quality]) or 333,
+                quality = tonumber(data[DataFields.Quality]) or 3,
+                durability = tonumber(data[DataFields.Durability]) or 99,
                 wear = tonumber(data[DataFields.Wear]) or 0,
                 data = copy(data[DataFields.Data]),
             }
@@ -71,11 +73,13 @@ function Forms.at(dimension, coordinate)
                 local item = assert(Registries.findByName("illarion:items", value.item), "Unknown item: " .. value.item)
                 local definition = assert(Registries.findByMetadata("entities", "itemId", item:getMetadata("id")),
                     "No item entity exists for: " .. value.item)
-                for _, field in ipairs({ "count", "quality", "wear" }) do
+                for _, field in ipairs({ "count", "quality", "durability", "wear" }) do
                     local number = value[field]
+                    local bounds = entry.schema[field]
+                    local minimum, maximum = bounds.min, bounds.max or 2147483647
                     assert(type(number) == "number" and number % 1 == 0
-                        and number >= (field == "count" and 1 or 0) and number <= 2147483647,
-                        field .. " must be a " .. (field == "count" and "positive" or "non-negative") .. " 32-bit integer.")
+                        and number >= minimum and number <= maximum,
+                        field .. " must be an integer between " .. minimum .. " and " .. maximum .. ".")
                 end
                 assert(type(value.data) == "table", "Item data must be an object.")
                 for key in pairs(value.data) do assert(type(key) == "string", "Item data must be an object.") end
@@ -94,6 +98,7 @@ function Forms.at(dimension, coordinate)
                 end
                 local data = entity:getRuntimeData(DataKeys.Item)
                 data[DataFields.Count], data[DataFields.Quality], data[DataFields.Wear] = value.count, value.quality, value.wear
+                data[DataFields.Durability] = value.durability
                 data[DataFields.Data] = copy(value.data)
                 if oldEntity then
                     oldEntity:despawn()
