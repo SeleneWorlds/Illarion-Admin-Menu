@@ -1,6 +1,7 @@
 local Registries = require("selene.registries")
 local Config = require("selene.config")
 local ItemForms = require("illarion-admin-menu.server.lua.item_forms")
+local MapPersistence = require("illarion-script-loader.server.lua.lib.mapPersistence")
 local Forms = {}
 
 local function copy(value)
@@ -229,16 +230,18 @@ function Forms.at(dimension, coordinate)
                     end
                 end
             end
+            local layer = MapPersistence.getLayer(dimension)
             for _, entry in ipairs(entries) do
                 local key = entry.key
                 local replacement = replacements[key]
                 if replacement then
-                    dimension:getMap():swapTile(coordinate, replacement.original, replacement.definition)
-                    dimension:annotateTile(coordinate, key, nil)
+                    dimension:getMap():swapTile(coordinate, replacement.original, replacement.definition, layer)
+                    dimension:annotateTile(coordinate, key, nil, layer)
                     entry.key = replacement.definition:getName()
                 end
-                dimension:annotateTile(coordinate, entry.key, updates[key])
+                dimension:annotateTile(coordinate, entry.key, updates[key], layer)
             end
+            MapPersistence.save(dimension)
         end,
     }
 end
