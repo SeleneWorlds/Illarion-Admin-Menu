@@ -202,6 +202,13 @@ function Forms.at(dimension, coordinate)
     return {
         title = #keys == 1 and titles[entries[1].kind] .. " (" .. keys[1] .. ")" or "Tile annotations",
         schema = schema, values = values, fieldLabels = labels,
+        delete = function()
+            local layer = MapPersistence.getLayer(dimension)
+            for _, entry in ipairs(entries) do
+                dimension:annotateTile(coordinate, entry.key, nil, layer)
+            end
+            MapPersistence.save(dimension)
+        end,
         update = function(newValues)
             local updates = {}
             local replacements, targetKeys = {}, {}

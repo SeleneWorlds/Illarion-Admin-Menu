@@ -217,6 +217,28 @@ end
 local moonlightEditorOk, moonlightEditor = pcall(require, "moonlight-editor.server.lua.editor")
 if moonlightEditorOk then
     moonlightEditor.registerContextMenuAction({
+        id = "illarion-admin-menu:create-warp",
+        label = "Create Warp",
+        isAvailable = function(player)
+            return getAdminCharacter(player) ~= nil
+        end,
+        execute = function(player, coordinate)
+            local administrator = assert(getAdminCharacter(player), "Administrator access required.")
+            local target = coordinate
+            local entity = player:getCameraEntity() or player:getControlledEntity()
+            local dimension = assert(entity and entity:getDimension(), "No editor dimension available.")
+            assert(not dimension:getAnnotationAt(target, "illarion:warp"), "A warp already exists at this coordinate.")
+            local MapPersistence = require("illarion-script-loader.server.lua.lib.mapPersistence")
+            dimension:annotateTile(target, "illarion:warp", {
+                x = administrator.pos.x, y = administrator.pos.y, z = administrator.pos.z,
+            }, MapPersistence.getLayer(dimension))
+            MapPersistence.save(dimension)
+            moonlightEditor.openInlineForm(player, target, TileAnnotationForms.at(dimension, target))
+            administrator:logAdmin(string.format("Create Warp at Coordinate (%d, %d, %d)", target.x, target.y, target.z))
+        end,
+    })
+
+    moonlightEditor.registerContextMenuAction({
         id = "illarion-admin-menu:teleport-here",
         label = "Teleport here",
         isAvailable = function(player)
