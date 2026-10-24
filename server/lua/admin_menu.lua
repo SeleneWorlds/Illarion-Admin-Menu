@@ -233,6 +233,7 @@ if moonlightEditorOk then
     moonlightEditor.registerContextMenuAction({
         id = "illarion-admin-menu:create-warp",
         label = "Create Warp",
+        icon = "arrow-right-left",
         separatorBefore = true,
         isAvailable = function(player)
             return getAdminCharacter(player) ~= nil
@@ -268,6 +269,7 @@ if moonlightEditorOk then
                 table.insert(actions, {
                     id = "illarion-admin-menu:edit-item:" .. key,
                     label = "Edit " .. TileAnnotationForms.label(key, { tile }),
+                    visual = item:getField("visual"),
                     execute = function(initiator, target)
                         local administrator = assert(getAdminCharacter(initiator), "Administrator access required.")
                         if not dimension:getAnnotationAt(target, key) then
