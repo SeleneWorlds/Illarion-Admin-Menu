@@ -85,11 +85,12 @@ local function definition(kind, data, legacy, key, tiles)
         local schema = ItemForms.schema()
         schema.count.max = 1
         local itemData = copy(data)
-        itemData.quality, itemData.wear = nil, nil
+        itemData.quality, itemData.durability, itemData.wear = nil, nil, nil
         return schema, {
             item = annotationItem(key, tiles):getName(), count = 1,
-            quality = tonumber(data.quality) or 333,
-            wear = tonumber(data.wear) or 0,
+            quality = tonumber(data.quality) or 3,
+            durability = tonumber(data.durability) or 99,
+            wear = tonumber(data.wear) or 255,
             data = itemData,
         }
     elseif kind == "warp" then
@@ -137,14 +138,18 @@ local function updated(kind, values, original, legacy)
         assert(type(values.item) == "string" and values.item ~= "", "An item is required.")
         assert(Registries.findByName("illarion:items", values.item), "Unknown item: " .. values.item)
         assert(values.count == 1, "Tile items must have a count of one.")
-        for _, field in ipairs({ "quality", "wear" }) do
-            numericValue(values[field], field .. " must be a non-negative 32-bit integer.")
+        local schema = ItemForms.schema()
+        for _, field in ipairs({ "quality", "durability", "wear" }) do
+            local number, bounds = values[field], schema[field]
+            assert(type(number) == "number" and number % 1 == 0
+                and number >= bounds.min and number <= bounds.max,
+                field .. " must be an integer between " .. bounds.min .. " and " .. bounds.max .. ".")
         end
         assert(type(values.data) == "table", "Item data must be an object.")
         for key in pairs(values.data) do assert(type(key) == "string", "Item data must be an object.") end
-        -- Tile item data is stored flat; quality and wear are reserved runtime fields.
+        -- Tile item data is stored flat; item condition fields are reserved runtime fields.
         local result = copy(values.data)
-        result.quality, result.wear = values.quality, values.wear
+        result.quality, result.durability, result.wear = values.quality, values.durability, values.wear
         return result
     elseif kind == "warp" then
         local destination = values.destination
@@ -183,8 +188,14 @@ local function updated(kind, values, original, legacy)
     return values
 end
 
-function Forms.at(dimension, coordinate)
-    local annotations = dimension:getAnnotationsAt(coordinate)
+function Forms.at(dimension, coordinate, key)
+    local annotations
+    if key then
+        local data = dimension:getAnnotationAt(coordinate, key)
+        annotations = data and { [key] = data } or {}
+    else
+        annotations = dimension:getAnnotationsAt(coordinate)
+    end
     local keys = {}
     for key in pairs(annotations) do table.insert(keys, key) end
     if #keys == 0 then return nil end

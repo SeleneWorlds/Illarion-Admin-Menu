@@ -253,6 +253,38 @@ if moonlightEditorOk then
         end,
     })
 
+    moonlightEditor.registerContextMenuProvider(function(player, coordinate)
+        if not getAdminCharacter(player) then return {} end
+        local entity = player:getCameraEntity() or player:getControlledEntity()
+        local dimension = entity and entity:getDimension()
+        if not dimension then return {} end
+        local actions, seen = {}, {}
+        for _, tile in ipairs(dimension:getTilesAt(coordinate)) do
+            local key = tile:getName()
+            local itemId = tonumber(tile:getMetadata("itemId"))
+            local item = itemId and Registries.findByMetadata("illarion:items", "id", itemId)
+            if item and not seen[key] then
+                seen[key] = true
+                table.insert(actions, {
+                    id = "illarion-admin-menu:edit-item:" .. key,
+                    label = "Edit " .. TileAnnotationForms.label(key, { tile }),
+                    execute = function(initiator, target)
+                        local administrator = assert(getAdminCharacter(initiator), "Administrator access required.")
+                        if not dimension:getAnnotationAt(target, key) then
+                            local MapPersistence = require("illarion-script-loader.server.lua.lib.mapPersistence")
+                            dimension:annotateTile(target, key, {}, MapPersistence.getLayer(dimension))
+                            MapPersistence.save(dimension)
+                            administrator:logAdmin(string.format("Create Item Annotation %s at Coordinate (%d, %d, %d)",
+                                key, target.x, target.y, target.z))
+                        end
+                        moonlightEditor.openInlineForm(initiator, target, TileAnnotationForms.at(dimension, target, key))
+                    end,
+                })
+            end
+        end
+        return actions
+    end)
+
     moonlightEditor.registerRegistryVisualResolver("illarion:races", raceVisual)
     moonlightEditor.registerRegistryVisualResolver("illarion:monsters", monsterVisual)
     moonlightEditor.registerRegistryVisualResolver("illarion:items", function(item)
