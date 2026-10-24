@@ -343,9 +343,13 @@ if moonlightEditorOk then
                 table.insert(keys, key)
             end
             table.sort(keys)
+            local labels = {}
+            for _, key in ipairs(keys) do
+                table.insert(labels, TileAnnotationForms.label(key, tiles))
+            end
             table.insert(gizmos, {
                 id = string.format("illarion:annotations:%d:%d:%d", coordinate.x, coordinate.y, coordinate.z),
-                label = table.concat(keys, ", "),
+                label = table.concat(labels, ", "),
                 coordinate = coordinate,
                 color = "#e8b84a",
                 lookup = true,

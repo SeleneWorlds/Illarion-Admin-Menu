@@ -22,6 +22,13 @@ local function annotationItem(key, tiles)
     return itemName and Registries.findByName("illarion:items", "illarion:" .. itemName)
 end
 
+function Forms.label(key, tiles)
+    local item = annotationItem(key, tiles)
+    if not item then return key end
+    local name = item:getField("name")
+    return name and name ~= "" and name or item:getName()
+end
+
 local function classify(key, data, tiles)
     if key == "illarion:warp" then return "warp" end
     if key == "illarion:triggerfield" then return "triggerfield" end
